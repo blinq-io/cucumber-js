@@ -91,41 +91,33 @@ const generateTestData = (
   }
 }
 
-const getDefinitionFunction = (
+export const getDefinitionFunction = async (
   feature_path: string,
   functionName: string,
   functionFile: string
 ) => {
-  const mjsFiles = fs
-    .readdirSync(path.join(feature_path, '../step_definitions'))
-    .filter((file) => file === `${functionFile}.js`)
+  const filePath = path.join(
+    feature_path,
+    '../step_definitions',
+    `${functionFile}.js`
+  )
 
-  if (mjsFiles.length === 0) {
-    throw new Error(`File ${functionFile} not found in step_definitions folder`)
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      `File ${functionFile}.js not found in step_definitions folder`
+    )
   }
 
-  const [mjsData] = mjsFiles.map((file) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { [functionName]: func } = require(path.join(
-      feature_path,
-      '../step_definitions',
-      file
-    ))
-    if (!func)
-      throw new Error(`Function ${functionName} not found in file ${file}`)
+  const { [functionName]: func } = await import(filePath)
+  if (!func)
+    throw new Error(
+      `Function ${functionName} not found in file ${functionFile}.js`
+    )
 
-    return func()
-  })
-
-  return mjsData
+  return func()
 }
 
-const generateExamplesFromFunction = (
-  data: string,
-  feature_path: string,
-  functionName: string,
-  functionFile: string
-) => {
+const generateExamplesFromFunction = (data: string, mjsData: any) => {
   const examples = data.split('Examples:')[1].split('\n').slice(1)
   const headers = examples[0]
     .split('|')
@@ -135,12 +127,6 @@ const generateExamplesFromFunction = (
     .split('|')
     .map((value) => value.trim())
     .filter((header) => header !== '')
-
-  const mjsData = getDefinitionFunction(
-    feature_path,
-    functionName,
-    functionFile
-  )
 
   const newExamples = headers.map((header) => {
     if (mjsData[header]) {

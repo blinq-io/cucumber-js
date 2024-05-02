@@ -19,6 +19,7 @@ import {
   generateExamplesFromFunction,
   generateTestData,
   generateExamplesFromFunctionGherkin,
+  getDefinitionFunction,
 } from '../formatter/feature_data_format'
 
 interface PickleWithDocument {
@@ -77,7 +78,7 @@ export async function getFilteredPicklesAndErrors({
       relativeTo: cwd,
       defaultDialect: coordinates.defaultDialect,
     },
-    (envelope) => {
+    async (envelope, funcResult) => {
       if (envelope.source) {
         let newDataAfterExamplesModify = envelope.source.data
         const functionMatch = envelope.source.data.match(
@@ -88,9 +89,7 @@ export async function getFilteredPicklesAndErrors({
           dataFunction = functionMatch[2]
           const { newData, mjsData } = generateExamplesFromFunction(
             envelope.source.data,
-            featurePaths[0],
-            dataFunction,
-            functionMatch[1]
+            funcResult
           )
           newDataAfterExamplesModify = newData
           mjsDataFiles = mjsData
@@ -215,12 +214,66 @@ export async function getFilteredPicklesAndErrors({
 async function gherkinFromPaths(
   paths: string[],
   options: IGherkinStreamOptions,
-  onEnvelope: (envelope: Envelope) => void
+  onEnvelope: (envelope: Envelope, funcResult?: any) => Promise<void>
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    let source: Envelope | null = null,
+      gherkinDocument: Envelope | null = null,
+      pickle: Envelope[] = [],
+      functionResult: any = null
+
     const gherkinMessageStream = GherkinStreams.fromPaths(paths, options)
-    gherkinMessageStream.on('data', onEnvelope)
-    gherkinMessageStream.on('end', resolve)
+    gherkinMessageStream.on('data', async (envelope: Envelope) => {
+      switch (Object.keys(envelope)[0]) {
+        case 'source': {
+          source = envelope
+          const functionMatch = envelope.source.data.match(
+            /@data:function:(.*?)\.(.*)/
+          )
+          if (functionMatch) {
+            functionResult = await getDefinitionFunction(
+              paths[0],
+              functionMatch[2],
+              functionMatch[1]
+            )
+          } else {
+            await new Promise<void>((resolve) => {
+              resolve()
+            })
+            functionResult = true
+          }
+          break
+        }
+        case 'gherkinDocument': {
+          gherkinDocument = envelope
+          break
+        }
+        case 'pickle': {
+          pickle.push(envelope)
+          break
+        }
+      }
+
+      if (
+        source &&
+        gherkinDocument &&
+        pickle.length > 0 &&
+        functionResult &&
+        envelope.source
+      ) {
+        await onEnvelope(source, functionResult)
+        await onEnvelope(gherkinDocument)
+
+        for (const pickleEnvelope of pickle) {
+          await onEnvelope(pickleEnvelope)
+        }
+        pickle = []
+
+        resolve()
+      }
+    })
+
+    // gherkinMessageStream.on('end', resolve)
     gherkinMessageStream.on('error', reject)
   })
 }
