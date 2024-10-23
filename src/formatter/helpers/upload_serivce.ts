@@ -8,25 +8,35 @@ import { axiosClient } from '../../configuration/axios_client'
 class RunUploadService {
   constructor(private runsApiBaseURL: string, private accessToken: string) {}
   async createRunDocument(name: string) {
-    const runDocResult = await axiosClient.post(
-      this.runsApiBaseURL + '/cucumber-runs/create',
-      {
-        name: name ? name : 'TEST',
-      },
-      {
-        headers: {
-          Authorization: 'Bearer ' + this.accessToken,
-          'x-source': 'cucumber_js',
+    try {
+      const runDocResult = await axiosClient.post(
+        this.runsApiBaseURL + '/cucumber-runs/create',
+        {
+          name: name ? name : 'TEST',
         },
+        {
+          headers: {
+            Authorization: 'Bearer ' + this.accessToken,
+            'x-source': 'cucumber_js',
+          },
+        }
+      )
+      if (runDocResult.status !== 200) {
+        throw new Error('Failed to create run document in the server')
       }
-    )
-    if (runDocResult.status !== 200) {
-      throw new Error('Failed to create run document in the server')
+      if (runDocResult.data.status !== true) {
+        throw new Error('Failed to create run document in the server')
+      }
+      return runDocResult.data.run
+    } catch (error) {
+      if (error.response && error.response.status === 403) {
+        console.log(
+          'Warning: Your trial plan has ended. Cannot create or upload reports.'
+        )
+        process.exit(1)
+      }
+      throw new Error('Failed to create run document in the server: ' + error)
     }
-    if (runDocResult.data.status !== true) {
-      throw new Error('Failed to create run document in the server')
-    }
-    return runDocResult.data.run
   }
   async upload(formData: FormData) {
     const response = await axiosClient.post(
@@ -40,6 +50,14 @@ class RunUploadService {
         },
       }
     )
+    if (response.status === 401) {
+      console.log(
+        'Warning: Your trial plan has ended. Cannot upload reports and perform retraining'
+      )
+      throw new Error(
+        'Warning: Your trial plan has ended. Cannot upload reports and perform retraining'
+      )
+    }
     if (response.status !== 200) {
       throw new Error('Failed to upload run to the server')
     }
@@ -61,6 +79,14 @@ class RunUploadService {
         },
       }
     )
+    if (response.status === 403) {
+      console.log(
+        'Warning: Your trial plan has ended. Cannot upload reports and perform retraining'
+      )
+      throw new Error(
+        'Warning: Your trial plan has ended. Cannot upload reports and perform retraining'
+      )
+    }
     if (response.status !== 200) {
       throw new Error('Failed to get pre-signed urls for the files')
     }
