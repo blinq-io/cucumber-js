@@ -172,7 +172,7 @@ export default class BVTAnalysisFormatter extends Formatter {
     const currentTimestampInSeconds = Math.floor(Date.now() / 1000);
     if( data.project.expriration_date < currentTimestampInSeconds){
       console.log('Warning: Your project has expired, retraining is restricted. Please contact sales.')
-      process.exit(1)
+      process.exit(1) 
     }
     return await this.call_cucumber_client(failedTestCases, testCase)
   }
