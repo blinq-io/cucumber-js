@@ -7,8 +7,11 @@ import { axiosClient } from '../../configuration/axios_client'
 import path from 'path'
 import { logReportLink } from '../bvt_analysis_formatter'
 
+const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
 const MAX_RETRIES = 3
+const REPORT_SERVICE_TOKEN =
+  process.env.TOKEN ?? process.env.REPORT_SERVICE_TOKEN
 class RunUploadService {
   constructor(private runsApiBaseURL: string, private accessToken: string) {}
   async createRunDocument(name: string) {

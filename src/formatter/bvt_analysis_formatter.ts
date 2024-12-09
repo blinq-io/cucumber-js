@@ -70,7 +70,14 @@ export default class BVTAnalysisFormatter extends Formatter {
   async finished(): Promise<any> {
     await new Promise((resolve) => {
       const checkInterval = setInterval(() => {
-        if (this.exit) {
+        let anyRem
+        if (process.env.UPLOADING_TEST_CASE) {
+          anyRem = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
+        } else {
+          anyRem = undefined
+        }
+
+        if (this.exit && (!anyRem || anyRem.length === 0)) {
           clearInterval(checkInterval)
           resolve(null)
         }
@@ -91,7 +98,9 @@ export default class BVTAnalysisFormatter extends Formatter {
         )
       }
       // const uploadSuccessful = await this.uploadFinalReport(report)
-      process.exit(0)
+      // process.exit(0)
+      this.exit = true
+      return
     }
 
     //checking if the type of report.result is JsonResultFailed or not

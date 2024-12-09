@@ -69,6 +69,7 @@ export default class ReportUploader {
           fileUris,
           runDocId
         )
+
         for (let i = 0; i < fileUris.length; i += BATCH_SIZE) {
           const batch = fileUris.slice(
             i,
