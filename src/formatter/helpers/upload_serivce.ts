@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import FormData from 'form-data'
+import { existsSync } from 'fs'
 import { createReadStream } from 'fs'
 import fs from 'fs/promises'
 import { JsonReport, JsonTestProgress } from './report_generator'
@@ -134,12 +135,14 @@ class RunUploadService {
             .filter((fileUri) => preSignedUrls[fileUri])
             .map(async (fileUri) => {
               for (let j = 0; j < MAX_RETRIES; j++) {
-                const success = await this.uploadFile(
-                  path.join(reportFolder, fileUri),
-                  preSignedUrls[fileUri]
-                )
-                if (success) {
-                  return
+                if (existsSync(path.join(reportFolder, fileUri))) {
+                  const success = await this.uploadFile(
+                    path.join(reportFolder, fileUri),
+                    preSignedUrls[fileUri]
+                  )
+                  if (success) {
+                    return
+                  }
                 }
               }
               console.error('Failed to upload file:', fileUri)
@@ -178,7 +181,6 @@ class RunUploadService {
           'Content-Length': fileSize,
         },
       })
-
     } catch (error) {
       if (process.env.NODE_ENV_BLINQ === 'dev') {
         console.error('Error uploading file:', error)
