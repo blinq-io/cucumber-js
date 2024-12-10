@@ -78,8 +78,13 @@ export default class BVTAnalysisFormatter extends Formatter {
         }
 
         if (this.exit && (!anyRem || anyRem.length === 0)) {
-          clearInterval(checkInterval)
-          resolve(null)
+          // clearInterval(checkInterval)
+          // resolve(null)
+          if (this.reportGenerator.getReport().result.status === 'FAILED') {
+            process.exit(1)
+          } else {
+            process.exit(0)
+          }
         }
       }, 100) // check every 100ms
     })
@@ -110,13 +115,10 @@ export default class BVTAnalysisFormatter extends Formatter {
       await this.uploadFinalReport(report)
       return
     }
-    const finalReport = await this.processTestCases(report)
-    const uploadSuccessful = await this.uploadFinalReport(finalReport)
-    if (finalReport.result.status !== 'FAILED' && uploadSuccessful) {
-      process.exit(0)
-    } else {
+    if (this.reportGenerator.getReport().result.status === 'FAILED') {
       process.exit(1)
     }
+    process.exit(0)
   }
   private async processTestCases(report: JsonReport): Promise<JsonReport> {
     const finalTestCases = []
