@@ -115,6 +115,7 @@ export default class BVTAnalysisFormatter extends Formatter {
       await this.uploadFinalReport(report)
       return
     }
+    await this.processTestCases(report)
     if (this.reportGenerator.getReport().result.status === 'FAILED') {
       process.exit(1)
     }
