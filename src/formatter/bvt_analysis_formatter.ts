@@ -1,6 +1,6 @@
 import { Envelope, Meta } from '@cucumber/messages'
 import { spawn } from 'child_process'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, existsSync, writeFileSync } from 'fs'
 import { mkdir, unlink, writeFile } from 'fs/promises'
 import path from 'path'
 import { tmpName } from 'tmp'
@@ -38,7 +38,7 @@ export default class BVTAnalysisFormatter extends Formatter {
     options.eventBroadcaster.on(
       'envelope',
       async (envelope: EnvelopeWithMetaMessage) => {
-        this.reportGenerator.handleMessage(envelope)
+        await this.reportGenerator.handleMessage(envelope)
         if (
           doesHaveValue(envelope.meta) &&
           doesHaveValue(envelope.meta.runName)
@@ -51,7 +51,7 @@ export default class BVTAnalysisFormatter extends Formatter {
           if (process.env.BVT_FORMATTER === 'ANALYSIS') {
             await this.analyzeReport(report)
           } else {
-            await this.uploadReport(report)
+            // await this.uploadReport(report)
           }
           this.exit = true
         }
@@ -70,9 +70,21 @@ export default class BVTAnalysisFormatter extends Formatter {
   async finished(): Promise<any> {
     await new Promise((resolve) => {
       const checkInterval = setInterval(() => {
-        if (this.exit) {
-          clearInterval(checkInterval)
-          resolve(null)
+        let anyRem
+        if (process.env.UPLOADING_TEST_CASE) {
+          anyRem = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
+        } else {
+          anyRem = undefined
+        }
+
+        if (this.exit && (!anyRem || anyRem.length === 0)) {
+          // clearInterval(checkInterval)
+          // resolve(null)
+          if (this.reportGenerator.getReport().result.status === 'FAILED') {
+            process.exit(1)
+          } else {
+            process.exit(0)
+          }
         }
       }, 100) // check every 100ms
     })
@@ -90,28 +102,23 @@ export default class BVTAnalysisFormatter extends Formatter {
           'Retraining is skipped since the failed step contains an API request\n'
         )
       }
-      const uploadSuccessful = await this.uploadFinalReport(report)
-      if (uploadSuccessful) {
-        process.exit(0)
-      }
-
-      process.exit(1)
+      // const uploadSuccessful = await this.uploadFinalReport(report)
+      // process.exit(0)
+      this.exit = true
+      return
     }
 
     //checking if the type of report.result is JsonResultFailed or not
     this.log('Some tests failed, starting the retraining...\n')
     if (!('startTime' in report.result) || !('endTime' in report.result)) {
       this.log('Unknown error occured,not retraining\n')
-      await this.uploadFinalReport(report)
       return
     }
-    const finalReport = await this.processTestCases(report)
-    const uploadSuccessful = await this.uploadFinalReport(finalReport)
-    if (finalReport.result.status !== 'FAILED' && uploadSuccessful) {
-      process.exit(0)
-    } else {
+    await this.processTestCases(report)
+    if (this.reportGenerator.getReport().result.status === 'FAILED') {
       process.exit(1)
     }
+    process.exit(0)
   }
   private async processTestCases(report: JsonReport): Promise<JsonReport> {
     const finalTestCases = []
@@ -149,6 +156,12 @@ export default class BVTAnalysisFormatter extends Formatter {
     if (!retrainStats) {
       return testCase
     }
+    if (retrainStats.result.status === 'PASSED') {
+      await this.uploader.modifyTestCase({
+        ...testCase,
+        retrainStats,
+      })
+    }
 
     return {
       ...testCase,
@@ -163,13 +176,23 @@ export default class BVTAnalysisFormatter extends Formatter {
         finalReport,
         this.runName
       )
-      this.logReportLink(runId, projectId)
+      logReportLink(runId, projectId)
     } catch (err) {
       this.log('Error uploading report\n')
       if ('stack' in err) {
         this.log(err.stack)
       }
       success = false
+    } finally {
+      try {
+        writeFileSync(
+          path.join(this.reportGenerator.reportFolder, 'report.json'),
+          JSON.stringify(finalReport, null, 2),
+          'utf-8'
+        )
+      } catch (e) {
+        console.error('failed to write report.json to local disk')
+      }
     }
 
     //this.log(JSON.stringify(finalReport, null, 2))
@@ -262,18 +285,6 @@ export default class BVTAnalysisFormatter extends Formatter {
       })
     })
   }
-  private logReportLink(runId: string, projectId: string) {
-    let reportLinkBaseUrl = 'https://www.app.blinq.io'
-    if (process.env.NODE_ENV_BLINQ === 'local') {
-      reportLinkBaseUrl = 'http://localhost:3000'
-    } else if (process.env.NODE_ENV_BLINQ === 'dev') {
-      reportLinkBaseUrl = 'https://dev.app.blinq.io'
-    } else if (process.env.NODE_ENV_BLINQ === 'stage') {
-      reportLinkBaseUrl = 'https://stage.app.blinq.io'
-    }
-    const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
-    this.log(`Report link: ${reportLink}\n`)
-  }
 
   private getAppDataDir() {
     if (process.env.BLINQ_APPDATA_DIR) {
@@ -295,4 +306,17 @@ export default class BVTAnalysisFormatter extends Formatter {
     }
     return appDataDir
   }
+}
+
+export function logReportLink(runId: string, projectId: string) {
+  let reportLinkBaseUrl = 'https://app.blinq.io'
+  if (process.env.NODE_ENV_BLINQ === 'local') {
+    reportLinkBaseUrl = 'http://localhost:3000'
+  } else if (process.env.NODE_ENV_BLINQ === 'dev') {
+    reportLinkBaseUrl = 'https://dev.app.blinq.io'
+  } else if (process.env.NODE_ENV_BLINQ === 'stage') {
+    reportLinkBaseUrl = 'https://stage.app.blinq.io'
+  }
+  const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
+  console.log(`Report link: ${reportLink}\n`)
 }

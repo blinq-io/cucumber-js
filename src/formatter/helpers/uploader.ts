@@ -1,4 +1,8 @@
-import ReportGenerator, { JsonReport } from './report_generator'
+import axios from 'axios'
+import ReportGenerator, {
+  JsonReport,
+  JsonTestProgress,
+} from './report_generator'
 import { RunUploadService } from './upload_serivce'
 
 import FormData from 'form-data'
@@ -59,7 +63,8 @@ export default class ReportUploader {
       await this.uploadService.upload(formData)
     } else {
       const fileUris = [
-        ...getFileUrisScreenShotDir(reportFolder),
+        ...getFileUris(reportFolder, 'screenshots'),
+        ...getFileUris(reportFolder, 'trace'),
         'report.json',
         'network.json',
       ]
@@ -68,6 +73,7 @@ export default class ReportUploader {
           fileUris,
           runDocId
         )
+
         for (let i = 0; i < fileUris.length; i += BATCH_SIZE) {
           const batch = fileUris.slice(
             i,
@@ -97,6 +103,18 @@ export default class ReportUploader {
     }
     return { runId: runDoc._id, projectId: runDoc.project_id }
   }
+
+  async modifyTestCase(testCase: JsonTestProgress) {
+    const runId = process.env.RUN_ID
+    if (!runId) {
+      return
+    }
+    const projectId = process.env.PROJECT_ID
+    if (!projectId) {
+      return
+    }
+    await this.uploadService.modifyTestCase(runId, projectId, testCase)
+  }
   async createZip(reportFolder: string | null, report: JsonReport) {
     if (reportFolder === null) {
       console.error('report folder is empty')
@@ -116,7 +134,7 @@ export default class ReportUploader {
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
     // save zip file
     const zipPath = path.join(reportFolder, 'report.zip')
-    fs.writeFileSync(zipPath, zipBuffer)
+    fs.writeFileSync(zipPath, new Uint8Array(zipBuffer))
     fs.writeFileSync(
       path.join(reportFolder, 'report.json'),
       JSON.stringify(report, null, 2)
@@ -124,8 +142,18 @@ export default class ReportUploader {
     return zipPath
   }
 }
+
 const getFileUrisScreenShotDir = (reportFolder: string) => {
   const files = fs.readdirSync(path.join(reportFolder, 'screenshots'))
 
   return files.map((file) => ['screenshots', file].join('/'))
+}
+
+const getFileUris = (reportFolder: string, targetFolder: string) => {
+  const resultFolder = path.join(reportFolder, targetFolder)
+  if (!fs.existsSync(resultFolder)) {
+    return []
+  }
+  const files = fs.readdirSync(resultFolder)
+  return files.map((file) => [targetFolder, file].join('/'))
 }
