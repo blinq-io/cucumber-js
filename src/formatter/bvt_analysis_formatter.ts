@@ -112,7 +112,6 @@ export default class BVTAnalysisFormatter extends Formatter {
     this.log('Some tests failed, starting the retraining...\n')
     if (!('startTime' in report.result) || !('endTime' in report.result)) {
       this.log('Unknown error occured,not retraining\n')
-      await this.uploadFinalReport(report)
       return
     }
     await this.processTestCases(report)
@@ -156,6 +155,12 @@ export default class BVTAnalysisFormatter extends Formatter {
 
     if (!retrainStats) {
       return testCase
+    }
+    if (retrainStats.result.status === 'PASSED') {
+      await this.uploader.modifyTestCase({
+        ...testCase,
+        retrainStats,
+      })
     }
 
     return {
