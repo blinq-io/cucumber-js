@@ -10,10 +10,10 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-    ? 'http://localhost:5001/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'stage'
-    ? 'https://stage.api.blinq.io/api/runs'
-    : 'https://api.blinq.io/api/runs'
+      ? 'http://localhost:5001/api/runs'
+      : process.env.NODE_ENV_BLINQ === 'stage'
+        ? 'https://stage.api.blinq.io/api/runs'
+        : 'https://api.blinq.io/api/runs'
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -99,6 +99,7 @@ export type JsonStep = {
   commands: JsonCommand[]
   result: JsonStepResult
   webLog: webLog[]
+  networkData: any[]
   data?: any
 }
 export type RetrainStats = {
@@ -161,6 +162,7 @@ export default class ReportGenerator {
   private logs: webLog[] = []
   private networkLog: any[] = []
   private stepLogs: webLog[] = []
+  private stepNetworkLogs: any[] = []
   private runName = ''
   reportFolder: null | string = null
   private uploadService = new RunUploadService(
@@ -369,6 +371,7 @@ export default class ReportGenerator {
         result: {
           status: 'UNKNOWN',
         },
+        networkData: [],
         webLog: [],
       })
       return this.stepReportMap.get(pickleStep.id)
@@ -429,6 +432,7 @@ export default class ReportGenerator {
     if (mediaType === 'application/json+network') {
       const networkLog = JSON.parse(body)
       if (this.networkLog.length < 1000) this.networkLog.push(networkLog)
+      this.stepNetworkLogs.push(networkLog)
     }
     const testStep = this.testStepMap.get(testStepId)
     if (testStep.pickleStepId === undefined) return
@@ -437,6 +441,29 @@ export default class ReportGenerator {
     if (mediaType === 'application/json') {
       const command: JsonCommand = JSON.parse(body)
       stepProgess.commands.push(command)
+    }
+  }
+  private getFailedTestStepResult({
+    commands,
+    startTime,
+    endTime,
+    result
+  }: { commands: JsonCommand[], startTime: number, endTime: number, result: messages.TestStepResult }): JsonStepResult {
+    for (const command of commands) {
+      if (command.result.status === 'FAILED') {
+        return {
+          status: 'FAILED',
+          message: command.result.message,
+          startTime,
+          endTime,
+        } as const
+      }
+    }
+    return {
+      status: 'FAILED',
+      startTime,
+      endTime,
+      message: result.message,
     }
   }
   private onTestStepFinished(testStepFinished: messages.TestStepFinished) {
@@ -490,14 +517,26 @@ export default class ReportGenerator {
     } catch (error) {
       console.log('Error reading data.json')
     }
-    stepProgess.result = {
-      status: testStepResult.status,
-      startTime: prevStepResult.startTime,
-      endTime: this.getTimeStamp(timestamp),
-      message: testStepResult.message,
-      // exception: testStepResult.exception,
+    if (testStepResult.status === 'FAILED') {
+      stepProgess.result = this.getFailedTestStepResult(
+        {
+          commands: stepProgess.commands,
+          startTime: prevStepResult.startTime,
+          endTime: this.getTimeStamp(timestamp),
+          result: testStepResult
+        }
+      )
+    } else {
+      stepProgess.result = {
+        status: testStepResult.status,
+        startTime: prevStepResult.startTime,
+        endTime: this.getTimeStamp(timestamp),
+      }
     }
+
     stepProgess.webLog = this.stepLogs
+    stepProgess.networkData = this.stepNetworkLogs
+    this.stepNetworkLogs = []
     this.stepLogs = []
     if (Object.keys(data).length > 0) {
       stepProgess.data = data
@@ -606,12 +645,35 @@ export default class ReportGenerator {
         projectId,
         this.reportFolder
       )
+      this.writeTestCaseReportToDisk(testCase)
     } catch (e) {
       console.error('Error uploading test case:', e)
     } finally {
       const arrRem = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
       arrRem.splice(arrRem.indexOf(randomID), 1)
       process.env.UPLOADING_TEST_CASE = JSON.stringify(arrRem)
+    }
+  }
+  private writeTestCaseReportToDisk(testCase: JsonTestProgress) {
+    try {
+      let i = 0
+      while (fs.existsSync(path.join(this.reportFolder, `${i}`))) {
+        i++
+      }
+      fs.mkdirSync(path.join(this.reportFolder, `${i}`))
+      //exclude network log from the saved report
+      const networkLog = testCase.networkLog
+      delete testCase.networkLog
+      fs.writeFileSync(
+        path.join(this.reportFolder, `${i}`, `report.json`),
+        JSON.stringify(testCase, null, 2)
+      )
+      fs.writeFileSync(
+        path.join(this.reportFolder, `${i}`, `network.json`),
+        JSON.stringify(networkLog, null, 2)
+      )
+    } catch (error) {
+      console.error('Error writing test case report to disk:', error)
     }
   }
   private onTestRunFinished(testRunFinished: messages.TestRunFinished) {
