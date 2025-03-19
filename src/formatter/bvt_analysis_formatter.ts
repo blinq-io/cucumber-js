@@ -61,7 +61,7 @@ export default class BVTAnalysisFormatter extends Formatter {
 
           if (!rootCause.status) {
             console.error(
-              `Root cause: ${rootCause.failClass}\n, ${rootCause.analysis}\nfailing step: ${rootCause.failedStep}`
+              `Root cause: ${rootCause.failClass}\n${rootCause.analysis}\nfailing step: ${rootCause.failedStep}`
             )
             this.rootCauseArray.push({ rootCause, report })
           }
