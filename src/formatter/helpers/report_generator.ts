@@ -10,10 +10,10 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-      ? 'http://localhost:5001/api/runs'
-      : process.env.NODE_ENV_BLINQ === 'stage'
-        ? 'https://stage.api.blinq.io/api/runs'
-        : 'https://api.blinq.io/api/runs'
+    ? 'http://localhost:5001/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? 'https://stage.api.blinq.io/api/runs'
+    : 'https://api.blinq.io/api/runs'
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -101,6 +101,7 @@ export type JsonStep = {
   webLog: webLog[]
   networkData: any[]
   data?: any
+  ariaSnapshot: string
 }
 export type RetrainStats = {
   result: JsonTestResult
@@ -117,6 +118,7 @@ export type JsonTestProgress = {
   steps: JsonStep[]
   result: JsonTestResult
   retrainStats?: RetrainStats
+  initialAriaSnapshot?: string
   webLog: any
   networkLog: any
   env: {
@@ -164,6 +166,8 @@ export default class ReportGenerator {
   private stepLogs: webLog[] = []
   private stepNetworkLogs: any[] = []
   private runName = ''
+  private ariaSnapshot = ''
+  private initialAriaSnapshot = ''
   reportFolder: null | string = null
   private uploadService = new RunUploadService(
     REPORT_SERVICE_URL,
@@ -374,6 +378,8 @@ export default class ReportGenerator {
         },
         networkData: [],
         webLog: [],
+        data: {},
+        ariaSnapshot: this.ariaSnapshot,
       })
       return this.stepReportMap.get(pickleStep.id)
     })
@@ -415,6 +421,14 @@ export default class ReportGenerator {
       this.reportFolder = body.replaceAll('\\', '/')
       return
     }
+    if (mediaType === 'application/json+snapshot-before') {
+      this.initialAriaSnapshot = body
+      return
+    }
+    if (mediaType === 'application/json+snapshot-after') {
+      this.ariaSnapshot = body
+      return
+    }
     if (mediaType === 'application/json+env') {
       const data = JSON.parse(body)
       this.report.env = data
@@ -448,8 +462,13 @@ export default class ReportGenerator {
     commands,
     startTime,
     endTime,
-    result
-  }: { commands: JsonCommand[], startTime: number, endTime: number, result: messages.TestStepResult }): JsonStepResult {
+    result,
+  }: {
+    commands: JsonCommand[]
+    startTime: number
+    endTime: number
+    result: messages.TestStepResult
+  }): JsonStepResult {
     for (const command of commands) {
       if (command.result.status === 'FAILED') {
         return {
@@ -519,14 +538,12 @@ export default class ReportGenerator {
       console.log('Error reading data.json')
     }
     if (testStepResult.status === 'FAILED') {
-      stepProgess.result = this.getFailedTestStepResult(
-        {
-          commands: stepProgess.commands,
-          startTime: prevStepResult.startTime,
-          endTime: this.getTimeStamp(timestamp),
-          result: testStepResult
-        }
-      )
+      stepProgess.result = this.getFailedTestStepResult({
+        commands: stepProgess.commands,
+        startTime: prevStepResult.startTime,
+        endTime: this.getTimeStamp(timestamp),
+        result: testStepResult,
+      })
     } else {
       stepProgess.result = {
         status: testStepResult.status,
@@ -537,6 +554,8 @@ export default class ReportGenerator {
 
     stepProgess.webLog = this.stepLogs
     stepProgess.networkData = this.stepNetworkLogs
+    stepProgess.ariaSnapshot = this.ariaSnapshot
+    this.ariaSnapshot = ''
     this.stepNetworkLogs = []
     this.stepLogs = []
     if (Object.keys(data).length > 0) {
@@ -609,6 +628,8 @@ export default class ReportGenerator {
     }
     testProgress.webLog = this.logs
     testProgress.networkLog = this.networkLog
+    testProgress.initialAriaSnapshot = this.initialAriaSnapshot
+    this.initialAriaSnapshot = ''
     this.networkLog = []
     this.logs = []
     return await this.uploadTestCase(testProgress)
