@@ -33,11 +33,16 @@ interface EnvelopeWithMetaMessage extends Envelope {
 }
 export default class BVTAnalysisFormatter extends Formatter {
   static reportGenerator: ReportGenerator
+  static reRunFailedStepsIndex:
+    | { testCaseId: string; failedStepIndex: number }[]
+    | null
   private reportGenerator = new ReportGenerator()
   private uploader = new ReportUploader(this.reportGenerator)
   private exit = false
   private START: number
   private runName: string
+  private failedStepsIndex: { testCaseId: string; failedStepIndex: number }[]
+  private hasStepFailed: boolean
   private summaryFormatter: SummaryFormatter
   private rootCauseArray: {
     rootCause: RootCauseProps
@@ -49,6 +54,11 @@ export default class BVTAnalysisFormatter extends Formatter {
     this.summaryFormatter = new SummaryFormatter(options)
     BVTAnalysisFormatter.reportGenerator = this.reportGenerator
     this.rootCauseArray = []
+    this.failedStepsIndex = []
+    BVTAnalysisFormatter.reRunFailedStepsIndex = process.env.RERUN
+      ? JSON.parse(process.env.RERUN)
+      : null
+
     if (!TOKEN && process.env.BVT_FORMATTER === 'ANALYSIS') {
       throw new Error('TOKEN must be set')
     }
@@ -64,11 +74,15 @@ export default class BVTAnalysisFormatter extends Formatter {
               `Root cause: ${rootCause.failClass}\n, ${rootCause.analysis}\nfailing step: ${rootCause.failedStep}`
             )
             this.rootCauseArray.push({ rootCause, report })
+            this.failedStepsIndex.push({
+              testCaseId: report.id,
+              failedStepIndex: rootCause.failedStep,
+            })
           }
           return
         }
-
         await this.reportGenerator.handleMessage(envelope)
+
         if (
           doesHaveValue(envelope.meta) &&
           doesHaveValue(envelope.meta.runName)
@@ -157,9 +171,13 @@ export default class BVTAnalysisFormatter extends Formatter {
     }
 
     //checking if the type of report.result is JsonResultFailed or not
+
     this.log('Some tests failed, starting the retraining...\n')
     await this.processTestCases()
-    await this.rerun()
+
+    if (this.hasStepFailed) {
+      await this.rerun()
+    }
 
     if (this.reportGenerator.getReport().result.status === 'FAILED') {
       process.exit(1)
@@ -176,11 +194,27 @@ export default class BVTAnalysisFormatter extends Formatter {
     report: JsonTestProgress
   ) {
     const failedTestSteps = rootCause.failedStep
+
+    if (
+      BVTAnalysisFormatter.reRunFailedStepsIndex &&
+      BVTAnalysisFormatter.reRunFailedStepsIndex.length > 0
+    ) {
+      const previousRun = BVTAnalysisFormatter.reRunFailedStepsIndex[0]
+      if (previousRun.failedStepIndex === failedTestSteps) {
+        console.log('Same step has failed again, skipping retraining')
+        BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
+        return
+      }
+      BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
+    }
+
     const retrainStats = await this.retrain(failedTestSteps, report)
 
     if (!retrainStats) {
       return
     }
+
+    this.hasStepFailed = true
 
     await this.uploader.modifyTestCase({
       ...report,
@@ -239,6 +273,7 @@ export default class BVTAnalysisFormatter extends Formatter {
       const cucumberClient = spawn(node_path, args, {
         env: {
           ...process.env,
+          RERUN: JSON.stringify(this.failedStepsIndex),
         },
       })
 
