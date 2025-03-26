@@ -21,11 +21,10 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm install-test
 
-
       - name: Fetch current version from npm with tag 'stage'
         id: npm_version
         run: |
-          version=$(npm show @dev-blinq/cucumber-js@beta version)
+          version=$(npm show @dev-blinq/cucumber-js@stage version)
           echo "version=$version" >> $GITHUB_ENV
 
       - name: Increment version
@@ -45,12 +44,7 @@ jobs:
 
       - name: Update package-lock.json
         run: npm install --package-lock-only
-<<<<<<< HEAD
-        working-directory: ${{ github.workspace }}      
-   
-=======
         working-directory: ${{ github.workspace }}
->>>>>>> 3d49abbb (changed to node ver 23)
 
       - uses: cucumber/action-publish-npm@v1.1.0
         with:
