@@ -14,6 +14,20 @@ const BATCH_SIZE = 10
 const MAX_RETRIES = 3
 const REPORT_SERVICE_TOKEN =
   process.env.TOKEN ?? process.env.REPORT_SERVICE_TOKEN
+
+export interface RootCauseProps {
+  status: boolean
+  analysis: string
+  failedStep: number
+  failClass: string
+}
+
+export interface FinishTestCaseResponse {
+  status: true
+  rootCause: RootCauseProps
+  report: JsonTestProgress
+}
+
 class RunUploadService {
   constructor(private runsApiBaseURL: string, private accessToken: string) {}
   async createRunDocument(name: string) {
@@ -110,7 +124,8 @@ class RunUploadService {
     testCaseReport: JsonTestProgress,
     runId: string,
     projectId: string,
-    reportFolder: string
+    reportFolder: string,
+    rerunId?: string
   ) {
     const fileUris = []
     //iterate over all the files in the JsonCommand.screenshotId and insert them into the fileUris array
@@ -150,7 +165,7 @@ class RunUploadService {
             })
         )
       }
-      await axiosClient.post(
+      const { data } = await axiosClient.post<FinishTestCaseResponse>(
         this.runsApiBaseURL + '/cucumber-runs/createNewTestCase',
         {
           runId,
@@ -158,6 +173,7 @@ class RunUploadService {
           testProgressReport: testCaseReport,
           mode: process.env.MODE === 'cloud' ? 'cloud' : 'local',
           browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
+          rerunId,
         },
         {
           headers: {
@@ -185,8 +201,10 @@ class RunUploadService {
         // no event tracking
       }
       logReportLink(runId, projectId)
+      return data
     } catch (e) {
       console.error(`failed to upload the test case: ${testCaseReport.id} ${e}`)
+      return null
     }
   }
   async uploadFile(filePath: string, preSignedUrl: string) {

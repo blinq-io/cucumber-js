@@ -10,10 +10,10 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-      ? 'http://localhost:5001/api/runs'
-      : process.env.NODE_ENV_BLINQ === 'stage'
-        ? 'https://stage.api.blinq.io/api/runs'
-        : 'https://api.blinq.io/api/runs'
+    ? 'http://localhost:5001/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? 'https://stage.api.blinq.io/api/runs'
+    : 'https://api.blinq.io/api/runs'
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -101,6 +101,7 @@ export type JsonStep = {
   webLog: webLog[]
   networkData: any[]
   data?: any
+  ariaSnapshot: string
 }
 export type RetrainStats = {
   result: JsonTestResult
@@ -117,6 +118,7 @@ export type JsonTestProgress = {
   steps: JsonStep[]
   result: JsonTestResult
   retrainStats?: RetrainStats
+  initialAriaSnapshot?: string
   webLog: any
   networkLog: any
   env: {
@@ -164,14 +166,19 @@ export default class ReportGenerator {
   private stepLogs: webLog[] = []
   private stepNetworkLogs: any[] = []
   private runName = ''
+  private ariaSnapshot = ''
+  private initialAriaSnapshot = ''
   reportFolder: null | string = null
   private uploadService = new RunUploadService(
     REPORT_SERVICE_URL,
     REPORT_SERVICE_TOKEN
   )
 
-  async handleMessage(envelope: EnvelopeWithMetaMessage) {
-    if (envelope.meta && envelope.meta.runName) {
+  async handleMessage(
+    envelope: EnvelopeWithMetaMessage | messages.Envelope,
+    reRunId?: string
+  ): Promise<any> {
+    if (envelope.meta && 'runName' in envelope.meta) {
       this.runName = envelope.meta.runName
     }
     const type = Object.keys(envelope)[0] as keyof messages.Envelope
@@ -227,8 +234,7 @@ export default class ReportGenerator {
       }
       case 'testCaseFinished': {
         const testCaseFinished = envelope[type]
-        await this.onTestCaseFinished(testCaseFinished)
-        break
+        return await this.onTestCaseFinished(testCaseFinished, reRunId)
       }
       // case "hook": { break} // After Hook
       case 'testRunFinished': {
@@ -373,6 +379,8 @@ export default class ReportGenerator {
         },
         networkData: [],
         webLog: [],
+        data: {},
+        ariaSnapshot: this.ariaSnapshot,
       })
       return this.stepReportMap.get(pickleStep.id)
     })
@@ -414,6 +422,14 @@ export default class ReportGenerator {
       this.reportFolder = body.replaceAll('\\', '/')
       return
     }
+    if (mediaType === 'application/json+snapshot-before') {
+      this.initialAriaSnapshot = body
+      return
+    }
+    if (mediaType === 'application/json+snapshot-after') {
+      this.ariaSnapshot = body
+      return
+    }
     if (mediaType === 'application/json+env') {
       const data = JSON.parse(body)
       this.report.env = data
@@ -447,8 +463,13 @@ export default class ReportGenerator {
     commands,
     startTime,
     endTime,
-    result
-  }: { commands: JsonCommand[], startTime: number, endTime: number, result: messages.TestStepResult }): JsonStepResult {
+    result,
+  }: {
+    commands: JsonCommand[]
+    startTime: number
+    endTime: number
+    result: messages.TestStepResult
+  }): JsonStepResult {
     for (const command of commands) {
       if (command.result.status === 'FAILED') {
         return {
@@ -518,14 +539,12 @@ export default class ReportGenerator {
       console.log('Error reading data.json')
     }
     if (testStepResult.status === 'FAILED') {
-      stepProgess.result = this.getFailedTestStepResult(
-        {
-          commands: stepProgess.commands,
-          startTime: prevStepResult.startTime,
-          endTime: this.getTimeStamp(timestamp),
-          result: testStepResult
-        }
-      )
+      stepProgess.result = this.getFailedTestStepResult({
+        commands: stepProgess.commands,
+        startTime: prevStepResult.startTime,
+        endTime: this.getTimeStamp(timestamp),
+        result: testStepResult,
+      })
     } else {
       stepProgess.result = {
         status: testStepResult.status,
@@ -536,6 +555,8 @@ export default class ReportGenerator {
 
     stepProgess.webLog = this.stepLogs
     stepProgess.networkData = this.stepNetworkLogs
+    stepProgess.ariaSnapshot = this.ariaSnapshot
+    this.ariaSnapshot = ''
     this.stepNetworkLogs = []
     this.stepLogs = []
     if (Object.keys(data).length > 0) {
@@ -591,7 +612,8 @@ export default class ReportGenerator {
     } as const
   }
   private async onTestCaseFinished(
-    testCaseFinished: messages.TestCaseFinished
+    testCaseFinished: messages.TestCaseFinished,
+    reRunId?: string
   ) {
     const { testCaseStartedId, timestamp } = testCaseFinished
     const testProgress = this.testCaseReportMap.get(testCaseStartedId)
@@ -608,11 +630,13 @@ export default class ReportGenerator {
     }
     testProgress.webLog = this.logs
     testProgress.networkLog = this.networkLog
+    testProgress.initialAriaSnapshot = this.initialAriaSnapshot
+    this.initialAriaSnapshot = ''
     this.networkLog = []
     this.logs = []
-    await this.uploadTestCase(testProgress)
+    return await this.uploadTestCase(testProgress, reRunId)
   }
-  private async uploadTestCase(testCase: JsonTestProgress) {
+  private async uploadTestCase(testCase: JsonTestProgress, rerunId?: string) {
     let runId = ''
     let projectId = ''
     if (!process.env.UPLOADING_TEST_CASE) {
@@ -621,6 +645,7 @@ export default class ReportGenerator {
     const anyRemArr = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
     const randomID = Math.random().toString(36).substring(7)
     anyRemArr.push(randomID)
+    let data
     process.env.UPLOADING_TEST_CASE = JSON.stringify(anyRemArr)
     try {
       if (
@@ -639,11 +664,12 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
-      await this.uploadService.uploadTestCase(
+      data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
         projectId,
-        this.reportFolder
+        this.reportFolder,
+        rerunId
       )
       this.writeTestCaseReportToDisk(testCase)
     } catch (e) {
@@ -653,6 +679,7 @@ export default class ReportGenerator {
       arrRem.splice(arrRem.indexOf(randomID), 1)
       process.env.UPLOADING_TEST_CASE = JSON.stringify(arrRem)
     }
+    return data ? data : null
   }
   private writeTestCaseReportToDisk(testCase: JsonTestProgress) {
     try {

@@ -18,6 +18,13 @@ import { getProjectByAccessKey } from './api'
 import SummaryFormatter from './summary_formatter'
 import { ActionEvents, SERVICES_URI } from './helpers/constants'
 import { axiosClient } from '../configuration/axios_client'
+import {
+  FinishTestCaseResponse,
+  RootCauseProps,
+} from './helpers/upload_serivce'
+import { promisify } from 'util';
+import { exec } from 'child_process';
+
 //User token
 const TOKEN = process.env.TOKEN
 interface MetaMessage extends Meta {
@@ -28,24 +35,56 @@ interface EnvelopeWithMetaMessage extends Envelope {
   meta: MetaMessage
 }
 export default class BVTAnalysisFormatter extends Formatter {
+  static reportGenerator: ReportGenerator
+  static reRunFailedStepsIndex:
+    | { testCaseId: string; failedStepIndex: number }[]
+    | null
   private reportGenerator = new ReportGenerator()
   private uploader = new ReportUploader(this.reportGenerator)
   private exit = false
   private START: number
   private runName: string
+  private failedStepsIndex: { testCaseId: string; failedStepIndex: number }[]
   private summaryFormatter: SummaryFormatter
+  private rootCauseArray: {
+    rootCause: RootCauseProps
+    report: JsonTestProgress
+  }[] = []
 
   constructor(options: IFormatterOptions) {
     super(options)
     this.summaryFormatter = new SummaryFormatter(options)
+    BVTAnalysisFormatter.reportGenerator = this.reportGenerator
+    this.rootCauseArray = []
+    this.failedStepsIndex = []
+    BVTAnalysisFormatter.reRunFailedStepsIndex = process.env.RERUN
+      ? JSON.parse(process.env.RERUN)
+      : null
+
     if (!TOKEN && process.env.BVT_FORMATTER === 'ANALYSIS') {
       throw new Error('TOKEN must be set')
     }
     this.sendEvent(ActionEvents.cli_run_tests)
     options.eventBroadcaster.on(
       'envelope',
-      async (envelope: EnvelopeWithMetaMessage) => {
+      async (envelope: EnvelopeWithMetaMessage, data?: any) => {
+        if (doesHaveValue(envelope.testCaseFinished) && data) {
+          const { rootCause, report } = data as FinishTestCaseResponse
+
+          if (!rootCause.status) {
+            console.error(
+              `Root cause: ${rootCause.failClass}\n, ${rootCause.analysis}\nfailing step: ${rootCause.failedStep}`
+            )
+            this.rootCauseArray.push({ rootCause, report })
+            this.failedStepsIndex.push({
+              testCaseId: report.id,
+              failedStepIndex: rootCause.failedStep,
+            })
+          }
+          return
+        }
         await this.reportGenerator.handleMessage(envelope)
+
         if (
           doesHaveValue(envelope.meta) &&
           doesHaveValue(envelope.meta.runName)
@@ -53,10 +92,9 @@ export default class BVTAnalysisFormatter extends Formatter {
           this.runName = envelope.meta.runName
         }
         if (doesHaveValue(envelope.testRunFinished)) {
-          const report = this.reportGenerator.getReport()
           this.START = Date.now()
           if (process.env.BVT_FORMATTER === 'ANALYSIS') {
-            await this.analyzeReport(report)
+            await this.analyzeReport()
           } else {
             // await this.uploadReport(report)
           }
@@ -115,12 +153,12 @@ export default class BVTAnalysisFormatter extends Formatter {
       }, 100) // check every 100ms
     })
   }
-  private async analyzeReport(report: JsonReport) {
+  private async analyzeReport() {
     if (
-      report.result.status === 'PASSED' ||
+      this.rootCauseArray.length === 0 ||
       process.env.NO_RETRAIN === 'false'
     ) {
-      if (report.result.status === 'PASSED') {
+      if (this.rootCauseArray.length === 0) {
         this.log('No test failed. No need to retrain\n')
       }
       if (process.env.NO_RETRAIN === 'false') {
@@ -135,66 +173,50 @@ export default class BVTAnalysisFormatter extends Formatter {
     }
 
     //checking if the type of report.result is JsonResultFailed or not
+
     this.log('Some tests failed, starting the retraining...\n')
-    if (!('startTime' in report.result) || !('endTime' in report.result)) {
-      this.log('Unknown error occured,not retraining\n')
-      return
-    }
-    await this.processTestCases(report)
+    await this.processTestCases()
     if (this.reportGenerator.getReport().result.status === 'FAILED') {
       process.exit(1)
     }
     process.exit(0)
   }
-  private async processTestCases(report: JsonReport): Promise<JsonReport> {
-    const finalTestCases = []
-    for (const testCase of report.testCases) {
-      const modifiedTestCase = await this.processTestCase(testCase, report)
-
-      finalTestCases.push(modifiedTestCase)
-    }
-    const finalResult = finalTestCases.some(
-      (tc) => tc.result.status !== 'PASSED'
-    )
-      ? report.result
-      : ({
-          ...report.result,
-          status: 'PASSED',
-        } as JsonTestResult)
-    return {
-      result: finalResult,
-      testCases: finalTestCases,
-      env: report.env,
+  private async processTestCases() {
+    for (const { rootCause, report } of this.rootCauseArray) {
+      await this.processTestCase(rootCause, report)
     }
   }
   private async processTestCase(
-    testCase: JsonTestProgress,
-    report: JsonReport
-  ): Promise<JsonTestProgress> {
-    if (testCase.result.status === 'PASSED') {
-      return testCase
+    rootCause: RootCauseProps,
+    report: JsonTestProgress
+  ) {
+    const failedTestSteps = rootCause.failedStep
+
+    if (
+      BVTAnalysisFormatter.reRunFailedStepsIndex &&
+      BVTAnalysisFormatter.reRunFailedStepsIndex.length > 0
+    ) {
+      const previousRun = BVTAnalysisFormatter.reRunFailedStepsIndex[0]
+      if (previousRun.failedStepIndex === failedTestSteps) {
+        console.log('Same step has failed again, skipping retraining')
+        BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
+        return
+      }
+      BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
     }
-    const failedTestSteps = testCase.steps
-      .map((step, i) =>
-        step.result.status === 'FAILED' || step.result.status === 'UNDEFINED'
-          ? i
-          : null
-      )
-      .filter((i) => i !== null)
-    const retrainStats = await this.retrain(failedTestSteps, testCase)
+
+    const retrainStats = await this.retrain(failedTestSteps, report)
 
     if (!retrainStats) {
-      return testCase
+      return
     }
+
     await this.uploader.modifyTestCase({
-      ...testCase,
+      ...report,
       retrainStats,
     })
 
-    return {
-      ...testCase,
-      retrainStats,
-    }
+    await this.rerun(report)
   }
 
   private async uploadFinalReport(finalReport: JsonReport) {
@@ -227,7 +249,7 @@ export default class BVTAnalysisFormatter extends Formatter {
     return success
   }
   private async retrain(
-    failedTestCases: number[],
+    failedTestCases: number,
     testCase: JsonTestProgress
   ): Promise<RetrainStats | null> {
     const data = await getProjectByAccessKey(TOKEN)
@@ -241,8 +263,50 @@ export default class BVTAnalysisFormatter extends Formatter {
     return await this.call_cucumber_client(failedTestCases, testCase)
   }
 
+  private async rerun(report: JsonTestProgress) {
+    await new Promise<void>((resolve) => {
+      const node_path = process.argv.shift()
+      const args = [
+        path.join(
+          process.cwd(),
+          'node_modules',
+          '@dev-blinq',
+          'cucumber-js',
+          'bin',
+          'cucumber.js'
+        ),
+        '--name',
+        `^${report.scenarioName}$`,
+        '--exit',
+        '--format',
+        'bvt',
+        '--run-name',
+        `${report.scenarioName}@debug`,
+        path.join(process.cwd(), 'features', `${report.featureName}.feature`),
+      ]
+      const cucumberClient = spawn(node_path, args, {
+        env: {
+          ...process.env,
+          RERUN: JSON.stringify(this.failedStepsIndex),
+        },
+      })
+
+      cucumberClient.stdout.on('data', (data) => {
+        console.log(data.toString())
+      })
+
+      cucumberClient.stderr.on('data', (data) => {
+        console.error(data.toString())
+      })
+
+      cucumberClient.on('close', () => {
+        resolve()
+      })
+    })
+  }
+
   private async call_cucumber_client(
-    stepsToRetrain: number[],
+    stepsToRetrain: number,
     testCase: JsonTestProgress
   ): Promise<RetrainStats | null> {
     return new Promise((resolve, reject) => {
@@ -261,7 +325,7 @@ export default class BVTAnalysisFormatter extends Formatter {
         path.join(process.cwd(), testCase.uri),
         `${testCase.scenarioName}`,
         'undefined',
-        `${stepsToRetrain.join(',')}`,
+        `${stepsToRetrain},`,
       ]
 
       if (process.env.BLINQ_ENV) {
@@ -355,4 +419,15 @@ export function logReportLink(runId: string, projectId: string) {
   }
   const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
   console.log(`Report link: ${reportLink}\n`)
+  try {
+    publishReportLinkToGuacServer(reportLink);
+  } catch (err) {
+  }
+}
+
+function publishReportLinkToGuacServer(reportLink: string) {
+  if (existsSync("/tmp/report_publish.sh")) {
+    const execAsync = promisify(exec);
+    execAsync("sh /tmp/report_publish.sh " + reportLink);
+  }
 }
