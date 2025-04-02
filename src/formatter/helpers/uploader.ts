@@ -9,22 +9,18 @@ import FormData from 'form-data'
 import fs, { writeFileSync } from 'fs'
 import JSZip from 'jszip'
 import path from 'path'
-
-let URL
-
-switch (process.env.NODE_ENV_BLINQ) {
-  case 'stage':
-    URL = 'https://stage.api.blinq.io/api/runs'
-    break
-  case 'dev':
-    URL = 'https://dev.api.blinq.io/api/runs'
-    break
-  case 'local':
-    URL = 'http://localhost:5001/api/runs'
-    break
-  default:
-    URL = 'https://api.blinq.io/api/runs'
-}
+const URL =
+  process.env.NODE_ENV_BLINQ === 'dev'
+    ? 'https://dev.api.blinq.io/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'local'
+    ? 'http://localhost:5001/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? 'https://stage.api.blinq.io/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'prod'
+    ? 'https://api.blinq.io/api/runs'
+    : !process.env.NODE_ENV_BLINQ
+    ? 'https://api.blinq.io/api/runs'
+    : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
