@@ -2,7 +2,7 @@ import * as messages from '@cucumber/messages'
 import fs from 'fs'
 import path from 'path'
 import { RunUploadService } from './upload_serivce'
-import { writeFileSync } from 'fs-extra'
+import { writeFileSync } from 'fs'
 // type JsonException = messages.Exception
 type JsonTimestamp = number //messages.Timestamp
 type JsonStepType = 'Unknown' | 'Context' | 'Action' | 'Outcome' | 'Conjunction'
