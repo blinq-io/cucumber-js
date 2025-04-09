@@ -19,8 +19,12 @@ const getSSoUrl = () => {
       return 'https://dev.api.blinq.io/api/auth'
     case 'stage':
       return 'https://stage.api.blinq.io/api/auth'
-    default:
+    case 'prod':
       return 'https://api.blinq.io/api/auth'
+    case null:
+      return 'https://api.blinq.io/api/auth'
+    default:
+      return `${process.env.NODE_ENV_BLINQ}/api/auth`
   }
 }
 
@@ -51,8 +55,12 @@ const getWorkSpaceUrl = () => {
       return 'https://dev.api.blinq.io/api/workspace'
     case "stage":
       return 'https://stage.api.blinq.io/api/workspace'
-    default:
+    case 'prod':
       return 'https://api.blinq.io/api/workspace'
+    case null:
+      return 'https://api.blinq.io/api/workspace'
+    default:
+      return `${process.env.NODE_ENV_BLINQ}/api/workspace`
   }
 }
 

@@ -2,7 +2,7 @@ import * as messages from '@cucumber/messages'
 import fs from 'fs'
 import path from 'path'
 import { RunUploadService } from './upload_serivce'
-import { writeFileSync } from 'fs-extra'
+import { writeFileSync } from 'fs'
 // type JsonException = messages.Exception
 type JsonTimestamp = number //messages.Timestamp
 type JsonStepType = 'Unknown' | 'Context' | 'Action' | 'Outcome' | 'Conjunction'
@@ -14,7 +14,11 @@ const URL =
       ? 'http://localhost:5001/api/runs'
       : process.env.NODE_ENV_BLINQ === 'stage'
         ? 'https://stage.api.blinq.io/api/runs'
-        : 'https://api.blinq.io/api/runs'
+        : process.env.NODE_ENV_BLINQ === 'prod'
+          ? 'https://api.blinq.io/api/runs'
+          : !process.env.NODE_ENV_BLINQ
+            ? 'https://api.blinq.io/api/runs'
+            : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -103,6 +107,7 @@ export type JsonStep = {
   networkData: any[]
   data?: any
   ariaSnapshot: string
+  traceFilePath?: string
 }
 export type RetrainStats = {
   result: JsonTestResult
@@ -458,6 +463,9 @@ export default class ReportGenerator {
     if (mediaType === 'application/json') {
       const command: JsonCommand = JSON.parse(body)
       stepProgess.commands.push(command)
+    } else if (mediaType === 'application/json+trace') {
+      const data = JSON.parse(body)
+      stepProgess.traceFilePath = data.traceFilePath
     }
   }
   private getFailedTestStepResult({
@@ -642,7 +650,10 @@ export default class ReportGenerator {
       if (!fs.existsSync(this.reportFolder)) {
         fs.mkdirSync(this.reportFolder)
       }
-      const reportFilePath = path.join(this.reportFolder, `${endTime}_${testProgress.scenarioName}.json`)
+      const reportFilePath = path.join(
+        this.reportFolder,
+        `${endTime}_${testProgress.scenarioName}.json`
+      )
       writeFileSync(reportFilePath, JSON.stringify(testProgress, null, 2))
       return undefined
     } else {
