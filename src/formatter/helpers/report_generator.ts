@@ -2,8 +2,9 @@ import * as messages from '@cucumber/messages'
 import fs from 'fs'
 import path from 'path'
 import { RunUploadService } from './upload_serivce'
-import { writeFileSync } from 'fs'
+import { writeFileSync } from 'fs-extra'
 // type JsonException = messages.Exception
+import objectPath from 'object-path'
 type JsonTimestamp = number //messages.Timestamp
 type JsonStepType = 'Unknown' | 'Context' | 'Action' | 'Outcome' | 'Conjunction'
 
@@ -11,14 +12,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-      ? 'http://localhost:5001/api/runs'
-      : process.env.NODE_ENV_BLINQ === 'stage'
-        ? 'https://stage.api.blinq.io/api/runs'
-        : process.env.NODE_ENV_BLINQ === 'prod'
-          ? 'https://api.blinq.io/api/runs'
-          : !process.env.NODE_ENV_BLINQ
-            ? 'https://api.blinq.io/api/runs'
-            : `${process.env.NODE_ENV_BLINQ}/api/runs`
+    ? 'http://localhost:5001/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? 'https://stage.api.blinq.io/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'prod'
+    ? 'https://api.blinq.io/api/runs'
+    : !process.env.NODE_ENV_BLINQ
+    ? 'https://api.blinq.io/api/runs'
+    : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -570,6 +571,33 @@ export default class ReportGenerator {
     this.stepLogs = []
     if (Object.keys(data).length > 0) {
       stepProgess.data = data
+      const id = testStepFinished.testCaseStartedId
+      const parameters = this.testCaseReportMap.get(id).parameters
+      const _parameters: typeof parameters = {}
+      Object.keys(parameters).map((key) => {
+        if (
+          parameters[key].startsWith('{{') &&
+          parameters[key].endsWith('}}')
+        ) {
+          const path = parameters[key].slice(2, -2).split('.')
+          let value = objectPath.get(data, path)
+          if (value) {
+            if (value.startsWith('secret:')) {
+              value = 'secret:****'
+            } else if (value.startsWith('totp:')) {
+              value = 'totp:****'
+            } else if (value.startsWith('mask:')) {
+              value = 'mask:****'
+            }
+            _parameters[key] = value
+          }
+        } else {
+          _parameters[key] = parameters[key]
+        }
+      })
+      this.report.testCases.find((testCase) => {
+        return testCase.id === id
+      }).parameters = _parameters
     }
 
     // if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
@@ -721,7 +749,8 @@ export default class ReportGenerator {
     return data ? data : null
   }
   private writeTestCaseReportToDisk(testCase: JsonTestProgress) {
-    const reportFolder = this.reportFolder ?? process.env.TESTCASE_REPORT_FOLDER_PATH
+    const reportFolder =
+      this.reportFolder ?? process.env.TESTCASE_REPORT_FOLDER_PATH
     if (!reportFolder) {
       console.error('Report folder is not defined')
       return
