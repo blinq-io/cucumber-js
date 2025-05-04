@@ -346,6 +346,10 @@ export default class BVTAnalysisFormatter extends Formatter {
           path.basename(name)
         )
         console.log('File path: ', tempFile)
+        // check if the file directory exists, if not create it
+        if (!existsSync(path.dirname(tempFile))) {
+          await mkdir(path.dirname(tempFile), { recursive: true })
+        }
         await writeFile(tempFile, '', 'utf-8')
 
         args.push(`--temp-file=${tempFile}`)
