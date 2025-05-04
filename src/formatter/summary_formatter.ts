@@ -69,7 +69,7 @@ export default class SummaryFormatter extends Formatter {
     if (warnings.length > 0) {
       this.logIssues({ issues: warnings, title: 'Warnings' })
     }
-    console.log("Report Link: ", globalReportLink,"\n");
+    console.log(`Report Link: , ${globalReportLink}\n`);
     this.log(
       formatSummary({
         colorFns: this.colorFns,
