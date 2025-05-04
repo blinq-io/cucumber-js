@@ -22,8 +22,8 @@ import {
   FinishTestCaseResponse,
   RootCauseProps,
 } from './helpers/upload_serivce'
-import { promisify } from 'util';
-import { exec } from 'child_process';
+import { promisify } from 'util'
+import { exec } from 'child_process'
 import { isCloudRecorder } from './helpers/isCloudRecorder'
 
 //User token
@@ -347,6 +347,10 @@ export default class BVTAnalysisFormatter extends Formatter {
           path.basename(name)
         )
         console.log('File path: ', tempFile)
+        // check if the file directory exists, if not create it
+        if (!existsSync(path.dirname(tempFile))) {
+          await mkdir(path.dirname(tempFile), { recursive: true })
+        }
         await writeFile(tempFile, '', 'utf-8')
 
         args.push(`--temp-file=${tempFile}`)
@@ -428,7 +432,7 @@ export function logReportLink(runId: string, projectId: string) {
   const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
   console.log(`Report link: ${reportLink}\n`)
   try {
-    publishReportLinkToGuacServer(reportLink);
+    publishReportLinkToGuacServer(reportLink)
   } catch (err) {
     // Error with events, ignoring
   }
@@ -436,7 +440,7 @@ export function logReportLink(runId: string, projectId: string) {
 
 function publishReportLinkToGuacServer(reportLink: string) {
   if (isCloudRecorder) {
-    const execAsync = promisify(exec);
-    execAsync("sh /tmp/report_publish.sh " + reportLink);
+    const execAsync = promisify(exec)
+    execAsync('sh /tmp/report_publish.sh ' + reportLink)
   }
 }
