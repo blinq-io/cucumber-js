@@ -259,6 +259,7 @@ class RunUploadService {
       );
     } catch (error) {
       // no event tracking
+      console.error("Failed to track event:", error);
     }
   }
   async modifyTestCase(runId: string, projectId: string, testProgressReport: JsonTestProgress) {
