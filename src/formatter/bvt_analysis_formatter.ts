@@ -34,6 +34,7 @@ interface MetaMessage extends Meta {
 interface EnvelopeWithMetaMessage extends Envelope {
   meta: MetaMessage
 }
+export let globalReportLink = ''
 export default class BVTAnalysisFormatter extends Formatter {
   static reportGenerator: ReportGenerator
   static reRunFailedStepsIndex:
@@ -346,6 +347,10 @@ export default class BVTAnalysisFormatter extends Formatter {
           path.basename(name)
         )
         console.log('File path: ', tempFile)
+        // check if the file directory exists, if not create it
+        if (!existsSync(path.dirname(tempFile))) {
+          await mkdir(path.dirname(tempFile), { recursive: true })
+        }
         await writeFile(tempFile, '', 'utf-8')
 
         args.push(`--temp-file=${tempFile}`)
@@ -424,10 +429,13 @@ export function logReportLink(runId: string, projectId: string) {
     reportLinkBaseUrl = process.env.NODE_ENV_BLINQ.replace('api', 'app')
   }
   const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
-  console.log(`Report link: ${reportLink}\n`)
+  globalReportLink = reportLink
   try {
     publishReportLinkToGuacServer(reportLink)
-  } catch (err) {}
+  } catch (err) {
+    // Error with events, ignoring
+  }
+  return reportLink
 }
 
 function publishReportLinkToGuacServer(reportLink: string) {
