@@ -190,7 +190,7 @@ class RunUploadService {
       } catch (error) {
         // no event tracking
       }
-      logReportLink(runId, projectId);
+      logReportLink(runId, projectId, testCaseReport.result);
       return data;
     } catch (e) {
       console.error(`failed to upload the test case: ${testCaseReport.id} ${e}`);
@@ -283,7 +283,7 @@ class RunUploadService {
       if (res.data.status !== true) {
         throw new Error("");
       }
-      logReportLink(runId, projectId);
+      logReportLink(runId, projectId, testProgressReport.result);
     } catch (e) {
       console.error(`failed to modify the test case: ${testProgressReport.id} ${e}`);
     }

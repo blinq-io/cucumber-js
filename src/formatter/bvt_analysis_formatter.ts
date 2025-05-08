@@ -228,7 +228,7 @@ export default class BVTAnalysisFormatter extends Formatter {
         finalReport,
         this.runName
       )
-      logReportLink(runId, projectId)
+      logReportLink(runId, projectId, finalReport.result)
     } catch (err) {
       this.log('Error uploading report\n')
       if ('stack' in err) {
@@ -415,7 +415,7 @@ export default class BVTAnalysisFormatter extends Formatter {
   }
 }
 
-export function logReportLink(runId: string, projectId: string) {
+export function logReportLink(runId: string, projectId: string, status: JsonTestResult) {
   let reportLinkBaseUrl = 'https://app.blinq.io'
   if (process.env.NODE_ENV_BLINQ === 'local') {
     reportLinkBaseUrl = 'http://localhost:3000'
@@ -433,16 +433,16 @@ export function logReportLink(runId: string, projectId: string) {
   const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
   globalReportLink = reportLink;
   try {
-    publishReportLinkToGuacServer(reportLink)
+    publishReportLinkToGuacServer(reportLink, status.status === "PASSED")
   } catch (err) {
     // Error with events, ignoring
   }
   return reportLink;
 }
 
-function publishReportLinkToGuacServer(reportLink: string) {
-  if (isCloudRecorder) {
+function publishReportLinkToGuacServer(reportLink: string, result: boolean) {
+  if (existsSync('/tmp/report_publish.sh')) {
     const execAsync = promisify(exec)
-    execAsync('sh /tmp/report_publish.sh ' + reportLink)
+    execAsync('sh /tmp/report_publish.sh ' + reportLink + ' ' + result)
   }
 }
