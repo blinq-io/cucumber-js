@@ -72,7 +72,6 @@ export default class SummaryFormatter extends Formatter {
     if (globalReportLink) {
       console.log(`Report link: ${globalReportLink}\n`);
     }
-    console.log('check1');
     this.log(
       formatSummary({
         colorFns: this.colorFns,
