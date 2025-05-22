@@ -703,9 +703,6 @@ export default class ReportGenerator {
     this.logs = [];
 
     if (this.testCaseLog && this.testCaseLog.length > 0) {
-      const fs = require('fs');
-      const path = require('path');
-  
       // Create the logs directory
       const logsDir = path.join(this.reportFolder, 'editorLogs');
       const fileName = `testCaseLog_${testCaseStartedId}.log`;
