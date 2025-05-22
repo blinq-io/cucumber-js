@@ -128,6 +128,7 @@ export type JsonTestProgress = {
   initialAriaSnapshot?: string;
   webLog: any;
   networkLog: any;
+  logFileId?: string; 
   env: {
     name: string;
     baseUrl: string;
@@ -175,6 +176,8 @@ export default class ReportGenerator {
   private runName = "";
   private ariaSnapshot = "";
   private initialAriaSnapshot = "";
+  private testCaseLog: string[] = [];
+  private loggingOverridden: boolean = false; // Flag to track if logging is overridden
   reportFolder: null | string = null;
   private uploadService = new RunUploadService(REPORT_SERVICE_URL, REPORT_SERVICE_TOKEN);
 
@@ -210,7 +213,33 @@ export default class ReportGenerator {
       }
       case "testCase": {
         const testCase = envelope[type];
+      
+        // Initialize the log storage
+        this.testCaseLog = [];
+      
+        if (!this.loggingOverridden) {
+          this.loggingOverridden = true;
+
+          // Store the original process.stdout.write, and process.stderr.write
+          const originalStdoutWrite = process.stdout.write;
+          const originalStderrWrite = process.stderr.write;
+
+          // Override process.stdout.write
+          process.stdout.write = (chunk: any, ...args: any[]) => {
+            this.testCaseLog.push(chunk.toString());
+            return originalStdoutWrite.call(process.stdout, chunk, ...args);
+          };
+
+          // Override process.stderr.write
+          process.stderr.write = (chunk: any, ...args: any[]) => {
+            this.testCaseLog.push(chunk.toString());
+            return originalStderrWrite.call(process.stderr, chunk, ...args);
+          };
+        }
+      
+        // Call the onTestCase method
         this.onTestCase(testCase);
+
         break;
       }
       case "testCaseStarted": {
@@ -235,7 +264,10 @@ export default class ReportGenerator {
       }
       case "testCaseFinished": {
         const testCaseFinished = envelope[type];
-        return await this.onTestCaseFinished(testCaseFinished, reRunId);
+      
+        // Call the onTestCaseFinished method
+        const result = await this.onTestCaseFinished(testCaseFinished, reRunId);  
+        return result;
       }
       // case "hook": { break} // After Hook
       case "testRunFinished": {
@@ -669,6 +701,23 @@ export default class ReportGenerator {
     this.initialAriaSnapshot = "";
     this.networkLog = [];
     this.logs = [];
+
+    if (this.testCaseLog && this.testCaseLog.length > 0) {
+      // Create the logs directory
+      const logsDir = path.join(this.reportFolder, 'editorLogs');
+      const fileName = `testCaseLog_${testCaseStartedId}.log`;
+      const filePath = path.join(logsDir, fileName);
+      
+      // Ensure the logs directory exists
+      fs.mkdirSync(logsDir, { recursive: true });
+      
+      // Write the logs to the file
+      fs.writeFileSync(filePath, this.testCaseLog.join('\n'), 'utf8');
+      
+      // Store this ID in the testProgress object so it can be accessed later
+      testProgress.logFileId = testCaseStartedId;
+    }
+    this.testCaseLog = [];
 
     if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
       this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH;

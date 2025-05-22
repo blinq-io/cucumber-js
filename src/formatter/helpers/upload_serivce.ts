@@ -124,6 +124,9 @@ class RunUploadService {
         fileUris.push("trace" + "/" + step.traceFilePath);
       }
     }
+    if (testCaseReport.logFileId) {
+      fileUris.push("editorLogs" + "/" + "testCaseLog_" + testCaseReport.logFileId + ".log");
+    }
     // console.log({ fileUris })
     const preSignedUrls = await this.getPreSignedUrls(fileUris, runId);
     //upload all the files in the fileUris array
