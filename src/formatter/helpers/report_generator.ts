@@ -12,14 +12,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-    ? 'http://localhost:5001/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'stage'
-    ? 'https://stage.api.blinq.io/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'prod'
-    ? 'https://api.blinq.io/api/runs'
-    : !process.env.NODE_ENV_BLINQ
-    ? 'https://api.blinq.io/api/runs'
-    : `${process.env.NODE_ENV_BLINQ}/api/runs`
+      ? 'http://localhost:5001/api/runs'
+      : process.env.NODE_ENV_BLINQ === 'stage'
+        ? 'https://stage.api.blinq.io/api/runs'
+        : process.env.NODE_ENV_BLINQ === 'prod'
+          ? 'https://api.blinq.io/api/runs'
+          : !process.env.NODE_ENV_BLINQ
+            ? 'https://api.blinq.io/api/runs'
+            : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -763,7 +763,28 @@ export default class ReportGenerator {
       return await this.uploadTestCase(testProgress, reRunId)
     }
   }
+  private readonly retryCount = 3
+
   private async uploadTestCase(testCase: JsonTestProgress, rerunId?: string) {
+    let data = null
+    for (let attempt = 1; attempt <= this.retryCount; attempt++) {
+      try {
+        data = await this.tryUpload(testCase, rerunId);
+        break;
+      } catch (e) {
+        console.error(`Attempt ${attempt} to upload testcase failed:`, e);
+        if (attempt === this.retryCount) {
+          console.error('All retry attempts failed, failed to upload testcase.');
+        } else {
+          const waitTime = 1000 * 2 ** (attempt - 1); //? exponential backoff: 1s, 2s, 4s...
+          await new Promise((r) => setTimeout(r, waitTime));
+        }
+      }
+    }
+    return data;
+  }
+
+  private async tryUpload(testCase: JsonTestProgress, rerunId?: string) {
     let runId = ''
     let projectId = ''
     if (!process.env.UPLOADING_TEST_CASE) {
@@ -772,7 +793,6 @@ export default class ReportGenerator {
     const anyRemArr = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
     const randomID = Math.random().toString(36).substring(7)
     anyRemArr.push(randomID)
-    let data
     process.env.UPLOADING_TEST_CASE = JSON.stringify(anyRemArr)
     try {
       if (
@@ -791,7 +811,7 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
-      data = await this.uploadService.uploadTestCase(
+      const data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
         projectId,
@@ -799,15 +819,14 @@ export default class ReportGenerator {
         rerunId
       )
       this.writeTestCaseReportToDisk(testCase)
-    } catch (e) {
-      console.error('Error uploading test case:', e)
+      return data
     } finally {
       const arrRem = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
       arrRem.splice(arrRem.indexOf(randomID), 1)
       process.env.UPLOADING_TEST_CASE = JSON.stringify(arrRem)
     }
-    return data ? data : null
   }
+
   private writeTestCaseReportToDisk(testCase: JsonTestProgress) {
     const reportFolder =
       this.reportFolder ?? process.env.TESTCASE_REPORT_FOLDER_PATH
