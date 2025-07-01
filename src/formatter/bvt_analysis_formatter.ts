@@ -267,45 +267,64 @@ export default class BVTAnalysisFormatter extends Formatter {
 
   private async rerun(report: JsonTestProgress) {
     await new Promise<void>((resolve) => {
-      const node_path = process.argv.shift()
+      // Default to system Node.js
+      let node_path = process.argv.shift();
+  
+      // Use bundled Node if running from recorder app on macOS or Windows
+      const isFromRecorderApp = process.env.FROM_RECORDER_APP === "true";
+      const isSupportedPlatform = process.platform === "darwin" || process.platform === "win32";
+  
+      if (isFromRecorderApp && isSupportedPlatform) {
+        node_path = process.execPath;
+      }
+  
       const args = [
         path.join(
           process.cwd(),
-          'node_modules',
-          '@dev-blinq',
-          'cucumber-js',
-          'bin',
-          'cucumber.js'
+          "node_modules",
+          "@dev-blinq",
+          "cucumber-js",
+          "bin",
+          "cucumber.js"
         ),
-        '--name',
+        "--name",
         `^${report.scenarioName}$`,
-        '--exit',
-        '--format',
-        'bvt',
-        '--run-name',
+        "--exit",
+        "--format",
+        "bvt",
+        "--run-name",
         `${report.scenarioName}@debug`,
-        path.join(process.cwd(), 'features', `${report.featureName}.feature`),
-      ]
-      const cucumberClient = spawn(node_path, args, {
-        env: {
-          ...process.env,
-          RERUN: JSON.stringify(this.failedStepsIndex),
-        },
-      })
-
-      cucumberClient.stdout.on('data', (data) => {
-        console.log(data.toString())
-      })
-
-      cucumberClient.stderr.on('data', (data) => {
-        console.error(data.toString())
-      })
-
-      cucumberClient.on('close', () => {
-        resolve()
-      })
-    })
+        path.join(process.cwd(), "features", `${report.featureName}.feature`),
+      ];
+  
+      const envVars: NodeJS.ProcessEnv = {
+        ...process.env,
+        RERUN: JSON.stringify(this.failedStepsIndex),
+      };
+  
+      // Inject Electron node env only if using bundled node
+      if (node_path === process.execPath) {
+        envVars.ELECTRON_RUN_AS_NODE = "1";
+      }
+  
+      const cucumberClient = spawn(node_path!, args, {
+        env: envVars,
+      });
+  
+      cucumberClient.stdout.on("data", (data) => {
+        console.log(data.toString());
+      });
+  
+      cucumberClient.stderr.on("data", (data) => {
+        console.error(data.toString());
+      });
+  
+      cucumberClient.on("close", () => {
+        resolve();
+      });
+    });
   }
+  
 
   private async call_cucumber_client(
     stepsToRetrain: number,
@@ -314,84 +333,101 @@ export default class BVTAnalysisFormatter extends Formatter {
     return new Promise((resolve, reject) => {
       const cucumber_client_path = path.resolve(
         process.cwd(),
-        'node_modules',
-        '@dev-blinq',
-        'cucumber_client',
-        'bin',
-        'client',
-        'cucumber.js'
-      )
-
+        "node_modules",
+        "@dev-blinq",
+        "cucumber_client",
+        "bin",
+        "client",
+        "cucumber.js"
+      );
+  
       const args: string[] = [
         process.cwd(),
         path.join(process.cwd(), testCase.uri),
         `${testCase.scenarioName}`,
-        'undefined',
+        "undefined",
         `${stepsToRetrain},`,
-      ]
-
+      ];
+  
       if (process.env.BLINQ_ENV) {
-        args.push(`--env=${process.env.BLINQ_ENV}`)
+        args.push(`--env=${process.env.BLINQ_ENV}`);
       }
-
-      if (!existsSync(path.join(this.getAppDataDir(), 'blinq.io', '.temp'))) {
-        mkdir(path.join(this.getAppDataDir(), 'blinq.io', '.temp'), {
+  
+      if (!existsSync(path.join(this.getAppDataDir(), "blinq.io", ".temp"))) {
+        mkdir(path.join(this.getAppDataDir(), "blinq.io", ".temp"), {
           recursive: true,
-        })
+        });
       }
-
+  
       tmpName(async (err, name) => {
         const tempFile = path.join(
           this.getAppDataDir(),
-          'blinq.io',
-          '.temp',
+          "blinq.io",
+          ".temp",
           path.basename(name)
-        )
-        console.log('File path: ', tempFile)
-        // check if the file directory exists, if not create it
+        );
+        console.log("File path: ", tempFile);
+  
         if (!existsSync(path.dirname(tempFile))) {
-          await mkdir(path.dirname(tempFile), { recursive: true })
+          await mkdir(path.dirname(tempFile), { recursive: true });
         }
-        await writeFile(tempFile, '', 'utf-8')
-
-        args.push(`--temp-file=${tempFile}`)
-        const cucumberClient = spawn('node', [cucumber_client_path, ...args], {
-          env: {
-            ...process.env,
-            TEMP_FILE_PATH: tempFile,
-          },
-        })
-
-        cucumberClient.stdout.on('data', (data) => {
-          console.log(data.toString())
-        })
-
-        cucumberClient.stderr.on('data', (data) => {
-          console.error(data.toString())
-        })
-
-        cucumberClient.on('close', async (code) => {
+        await writeFile(tempFile, "", "utf-8");
+  
+        args.push(`--temp-file=${tempFile}`);
+  
+        // Determine node path
+        const isFromRecorderApp = process.env.FROM_RECORDER_APP === "true";
+        const isSupportedPlatform =
+          process.platform === "darwin" || process.platform === "win32";
+        const node_path =
+          isFromRecorderApp && isSupportedPlatform
+            ? process.execPath
+            : "node";
+  
+        const envVars: NodeJS.ProcessEnv = {
+          ...process.env,
+          TEMP_FILE_PATH: tempFile,
+        };
+  
+        if (node_path === process.execPath) {
+          envVars.ELECTRON_RUN_AS_NODE = "1";
+        }
+  
+        const cucumberClient = spawn(node_path, [cucumber_client_path, ...args], {
+          env: envVars,
+        });
+  
+        cucumberClient.stdout.on("data", (data) => {
+          console.log(data.toString());
+        });
+  
+        cucumberClient.stderr.on("data", (data) => {
+          console.error(data.toString());
+        });
+  
+        cucumberClient.on("close", async (code) => {
           if (code === 0) {
-            const reportData = readFileSync(tempFile, 'utf-8')
-            const retrainStats = JSON.parse(reportData) as RetrainStats
-            await unlink(tempFile)
-            resolve(retrainStats)
+            const reportData = readFileSync(tempFile, "utf-8");
+            const retrainStats = JSON.parse(reportData) as RetrainStats;
+            await unlink(tempFile);
+            resolve(retrainStats);
           } else {
-            this.log('Error retraining\n')
+            this.log("Error retraining\n");
             try {
-              const reportData = readFileSync(tempFile, 'utf-8')
-              const retrainStats = JSON.parse(reportData) as RetrainStats
-              await unlink(tempFile)
-              resolve(retrainStats)
+              const reportData = readFileSync(tempFile, "utf-8");
+              const retrainStats = JSON.parse(reportData) as RetrainStats;
+              await unlink(tempFile);
+              resolve(retrainStats);
             } catch (e) {
-              this.log('Error  reading scenario report\n ' + e)
-              resolve(null)
+              this.log("Error  reading scenario report\n " + e);
+              resolve(null);
             }
           }
-        })
-      })
-    })
+        });
+      });
+    });
   }
+  
 
   private getAppDataDir() {
     if (process.env.BLINQ_APPDATA_DIR) {
