@@ -101,7 +101,6 @@ const generateTestData = (
       fakeIndex++
     } catch (err) {
       // eslint-disable-next-line no-console
-      //console.log('unknown faker variable:' + match[0])
     }
   }
 
