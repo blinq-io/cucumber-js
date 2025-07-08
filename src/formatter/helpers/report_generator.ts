@@ -180,9 +180,6 @@ export default class ReportGenerator {
   private testCaseLog: string[] = []
   private loggingOverridden: boolean = false // Flag to track if logging is overridden
   reportFolder: null | string = null
-  // Add this property to track if we've encountered an undefined step
-  private hasUndefinedStep = false
-  private currentTestCaseId: string | null = null
   private uploadService = new RunUploadService(
     REPORT_SERVICE_URL,
     REPORT_SERVICE_TOKEN
@@ -380,10 +377,7 @@ export default class ReportGenerator {
     return parameters
   }
   private onTestCaseStarted(testCaseStarted: messages.TestCaseStarted) {
-    // Reset the undefined step flag for each new test case
-    this.hasUndefinedStep = false
-    this.currentTestCaseId = testCaseStarted.id
-      const { testCaseId, id, timestamp } = testCaseStarted
+    const { testCaseId, id, timestamp } = testCaseStarted
     const testCase = this.testCaseMap.get(testCaseId)
     if (testCase === undefined)
       throw new Error(`testCase with id ${testCaseId} not found`)
@@ -457,18 +451,8 @@ export default class ReportGenerator {
     if (testStep === undefined)
       throw new Error(`testStep with id ${testStepId} not found`)
     if (testStep.pickleStepId === undefined) return
-    
-    // If we already have an undefined step in this test case, skip remaining steps
-    if (this.hasUndefinedStep) {
-      const stepProgress = this.stepReportMap.get(testStep.pickleStepId)
-      stepProgress.result = {
-        status: 'SKIPPED'
-      }
-      return
-    }
-    
-    const stepProgress = this.stepReportMap.get(testStep.pickleStepId)
-    stepProgress.result = {
+    const stepProgess = this.stepReportMap.get(testStep.pickleStepId)
+    stepProgess.result = {
       status: 'STARTED',
       startTime: this.getTimeStamp(timestamp),
     }
@@ -567,18 +551,7 @@ export default class ReportGenerator {
       }
       return
     }
-    
-    const stepProgress = this.stepReportMap.get(testStep.pickleStepId)
-    
-    // If this step was skipped due to previous undefined step, don't process it
-    if (stepProgress.result.status === 'SKIPPED') {
-      return
-    }
-    
     if (testStepResult.status === 'UNDEFINED') {
-      // Mark that we've encountered an undefined step
-      this.hasUndefinedStep = true
-      
       const step = this.stepReportMap.get(testStep.pickleStepId)
       const stepName = step ? step.keyword + ' ' + step.text : 'Undefined step'
       const undefinedCommand: messages.Attachment = {
@@ -597,8 +570,8 @@ export default class ReportGenerator {
       }
       this.onAttachment(undefinedCommand)
     }
-    
-    const prevStepResult = stepProgress.result as {
+    const stepProgess = this.stepReportMap.get(testStep.pickleStepId)
+    const prevStepResult = stepProgess.result as {
       status: 'STARTED'
       startTime: JsonTimestamp
     }
@@ -618,30 +591,29 @@ export default class ReportGenerator {
     } catch (error) {
       console.log('Error reading data.json')
     }
-    
     if (testStepResult.status === 'FAILED') {
-      stepProgress.result = this.getFailedTestStepResult({
-        commands: stepProgress.commands,
+      stepProgess.result = this.getFailedTestStepResult({
+        commands: stepProgess.commands,
         startTime: prevStepResult.startTime,
         endTime: this.getTimeStamp(timestamp),
         result: testStepResult,
       })
     } else {
-      stepProgress.result = {
+      stepProgess.result = {
         status: testStepResult.status,
         startTime: prevStepResult.startTime,
         endTime: this.getTimeStamp(timestamp),
       }
     }
-  
-    stepProgress.webLog = this.stepLogs
-    stepProgress.networkData = this.stepNetworkLogs
-    stepProgress.ariaSnapshot = this.ariaSnapshot
+
+    stepProgess.webLog = this.stepLogs
+    stepProgess.networkData = this.stepNetworkLogs
+    stepProgess.ariaSnapshot = this.ariaSnapshot
     this.ariaSnapshot = ''
     this.stepNetworkLogs = []
     this.stepLogs = []
     if (Object.keys(data).length > 0) {
-      stepProgress.data = data
+      stepProgess.data = data
       const id = testStepFinished.testCaseStartedId
       const parameters = this.testCaseReportMap.get(id).parameters
       const _parameters: typeof parameters = {}
@@ -670,6 +642,21 @@ export default class ReportGenerator {
         return testCase.id === id
       }).parameters = _parameters
     }
+
+    // if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
+    //   this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
+    //   if (!fs.existsSync(this.reportFolder)) {
+    //     fs.mkdirSync(this.reportFolder)
+    //   }
+    //   const reportFilePath = path.join(
+    //     this.reportFolder,
+    //     `report.json`
+    //   )
+    //   writeFileSync(reportFilePath, JSON.stringify(this.report, null, 2))
+    //   return undefined
+    //   // } else {
+    //   // return await this.uploadTestCase(testProgress, reRunId)
+    // }
   }
   getLogFileContent() {
     let projectPath = process.cwd()
