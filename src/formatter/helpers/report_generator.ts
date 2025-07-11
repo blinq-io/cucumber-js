@@ -110,6 +110,7 @@ export type JsonStep = {
   ariaSnapshot: string
   traceFilePath?: string
   brunoData?: any
+  interceptResults?: any
 }
 export type RetrainStats = {
   result: JsonTestResult
@@ -509,6 +510,16 @@ export default class ReportGenerator {
         stepProgess.brunoData = data
       } catch (error) {
         console.error('Error parsing bruno data:', error)
+      }
+    }
+
+    if (mediaType === 'application/json+intercept-results') {
+      console.log('Intercept results received:', body)
+      try {
+        const data = JSON.parse(body)
+        stepProgess.interceptResults = data
+      } catch (error) {
+        console.error('Error parsing intercept results:', error)
       }
     }
   }
