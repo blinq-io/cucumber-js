@@ -179,6 +179,7 @@ export default class ReportGenerator {
   private ariaSnapshot = ''
   private initialAriaSnapshot = ''
   private testCaseLog: string[] = []
+  private hasUndefinedStep = false // Flag to track if any step is undefined
   private loggingOverridden: boolean = false // Flag to track if logging is overridden
   reportFolder: null | string = null
   private uploadService = new RunUploadService(
@@ -378,6 +379,8 @@ export default class ReportGenerator {
     return parameters
   }
   private onTestCaseStarted(testCaseStarted: messages.TestCaseStarted) {
+    // Reset the undefined step flag for each new test case
+    this.hasUndefinedStep = false;
     const { testCaseId, id, timestamp } = testCaseStarted
     const testCase = this.testCaseMap.get(testCaseId)
     if (testCase === undefined)
@@ -452,6 +455,14 @@ export default class ReportGenerator {
     if (testStep === undefined)
       throw new Error(`testStep with id ${testStepId} not found`)
     if (testStep.pickleStepId === undefined) return
+    // If we already have an undefined step in this test case, skip remaining steps
+    if (this.hasUndefinedStep) {
+      const stepProgress = this.stepReportMap.get(testStep.pickleStepId)
+      stepProgress.result = {
+        status: 'SKIPPED'
+      }
+      return
+    }
     const stepProgess = this.stepReportMap.get(testStep.pickleStepId)
     stepProgess.result = {
       status: 'STARTED',
@@ -562,7 +573,14 @@ export default class ReportGenerator {
       }
       return
     }
+    const stepProgress = this.stepReportMap.get(testStep.pickleStepId)
+    // If this step was skipped due to previous undefined step, don't process it
+    if (stepProgress.result.status === 'SKIPPED') {
+      return
+    }
     if (testStepResult.status === 'UNDEFINED') {
+      // Mark that we've encountered an undefined step
+      this.hasUndefinedStep = true;
       const step = this.stepReportMap.get(testStep.pickleStepId)
       const stepName = step ? step.keyword + ' ' + step.text : 'Undefined step'
       const undefinedCommand: messages.Attachment = {
