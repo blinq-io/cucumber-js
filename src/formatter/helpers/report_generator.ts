@@ -514,7 +514,6 @@ export default class ReportGenerator {
     }
 
     if (mediaType === 'application/json+intercept-results') {
-      console.log('Intercept results received:', body)
       try {
         const data = JSON.parse(body)
         stepProgess.interceptResults = data
