@@ -633,7 +633,7 @@ export default class ReportGenerator {
           parameters[key].endsWith('}}')
         ) {
           const path = parameters[key].slice(2, -2).split('.')
-          let value = String(objectPath.get(data, path))
+          let value = String(objectPath.get(data, path) ?? parameters[key]);
           if (value) {
             if (value.startsWith('secret:')) {
               value = 'secret:****'
