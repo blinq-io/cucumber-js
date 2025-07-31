@@ -728,6 +728,9 @@ export default class ReportGenerator {
     }
     const steps = Object.values(testProgress.steps)
     const result = this.getTestCaseResult(steps)
+    if (result.status === 'PASSED' && reRunId) {
+      this.uploadService.updateProjectAnalytics(process.env.PROJECT_ID);
+    }
     const endTime = this.getTimeStamp(timestamp)
     testProgress.result = {
       ...result,
