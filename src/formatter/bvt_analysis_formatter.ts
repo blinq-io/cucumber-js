@@ -283,7 +283,7 @@ export default class BVTAnalysisFormatter extends Formatter {
         'bvt',
         '--run-name',
         `${report.scenarioName}@debug`,
-        path.join(process.cwd(), 'features', `${report.featureName}.feature`),
+        path.join(process.cwd(), report.uri),
       ]
       const cucumberClient = spawn(node_path, args, {
         env: {
