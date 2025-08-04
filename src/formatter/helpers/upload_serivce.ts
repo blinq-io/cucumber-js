@@ -61,6 +61,24 @@ class RunUploadService {
       throw new Error('Failed to create run document in the server: ' + error)
     }
   }
+  async updateProjectAnalytics(projectId: string) {
+    try {
+      await axiosClient.post(
+        this.runsApiBaseURL + '/project/updateAIRecoveryCount',
+        {
+          projectId,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + this.accessToken,
+            'x-source': 'cucumber_js',
+          },
+        }
+      )
+    } catch (error) {
+      console.error('Failed to update project metadata:', error)
+    }
+  }
   async upload(formData: FormData) {
     const response = await axiosClient.post(
       this.runsApiBaseURL + '/cucumber-runs/upload',

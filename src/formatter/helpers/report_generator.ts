@@ -633,7 +633,7 @@ export default class ReportGenerator {
           parameters[key].endsWith('}}')
         ) {
           const path = parameters[key].slice(2, -2).split('.')
-          let value = String(objectPath.get(data, path))
+          let value = String(objectPath.get(data, path) ?? parameters[key]);
           if (value) {
             if (value.startsWith('secret:')) {
               value = 'secret:****'
@@ -728,6 +728,9 @@ export default class ReportGenerator {
     }
     const steps = Object.values(testProgress.steps)
     const result = this.getTestCaseResult(steps)
+    if (result.status === 'PASSED' && reRunId) {
+      this.uploadService.updateProjectAnalytics(process.env.PROJECT_ID);
+    }
     const endTime = this.getTimeStamp(timestamp)
     testProgress.result = {
       ...result,
