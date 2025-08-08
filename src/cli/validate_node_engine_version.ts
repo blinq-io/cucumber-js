@@ -27,8 +27,8 @@ export function validateNodeEngineVersion(
       `Cucumber can only run on Node.js versions ${requiredVersions}. This Node.js version is ${currentVersion}`
     )
   } else if (!semver.satisfies(currentVersion, testedVersions)) {
-    onWarning(
-      `This Node.js version (${currentVersion}) has not been tested with this version of Cucumber; it should work normally, but please raise an issue if you see anything unexpected.`
-    )
+    // onWarning(
+    //   `This Node.js version (${currentVersion}) has not been tested with this version of Cucumber; it should work normally, but please raise an issue if you see anything unexpected.`
+    // )
   }
 }
