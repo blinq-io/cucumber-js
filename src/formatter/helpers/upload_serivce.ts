@@ -273,7 +273,7 @@ class RunUploadService {
         runId,
         projectId,
         browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-        mode: process.env.MODE === 'cloud' ? 'cloud' : 'local',
+        mode: process.env.MODE === 'cloud' ? 'cloud' : (process.env.MODE === 'executions' ? 'executions' : 'local'),
       },
       {
         headers: {
