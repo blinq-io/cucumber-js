@@ -266,7 +266,18 @@ export default class BVTAnalysisFormatter extends Formatter {
 
   private async rerun(report: JsonTestProgress) {
     await new Promise<void>((resolve) => {
-      const node_path = process.argv.shift()
+      // Default to system Node.js
+      let node_path = process.argv.shift()
+
+      // Use bundled Node if running from recorder app on macOS or Windows
+      const isFromRecorderApp = process.env.FROM_RECORDER_APP === 'true'
+      const isSupportedPlatform =
+        process.platform === 'darwin' || process.platform === 'win32'
+
+      if (isFromRecorderApp && isSupportedPlatform) {
+        node_path = process.execPath
+      }
+
       const args = [
         path.join(
           process.cwd(),
@@ -283,13 +294,21 @@ export default class BVTAnalysisFormatter extends Formatter {
         'bvt',
         '--run-name',
         `${report.scenarioName}@debug`,
-        path.join(process.cwd(), 'features', `${report.featureName}.feature`),
+        path.join(process.cwd(), report.uri),
       ]
-      const cucumberClient = spawn(node_path, args, {
-        env: {
-          ...process.env,
-          RERUN: JSON.stringify(this.failedStepsIndex),
-        },
+
+      const envVars: NodeJS.ProcessEnv = {
+        ...process.env,
+        RERUN: JSON.stringify(this.failedStepsIndex),
+      }
+
+      // Inject Electron node env only if using bundled node
+      if (node_path === process.execPath) {
+        envVars.ELECTRON_RUN_AS_NODE = '1'
+      }
+
+      const cucumberClient = spawn(node_path!, args, {
+        env: envVars,
       })
 
       cucumberClient.stdout.on('data', (data) => {
@@ -347,18 +366,37 @@ export default class BVTAnalysisFormatter extends Formatter {
           path.basename(name)
         )
         console.log('File path: ', tempFile)
-        // check if the file directory exists, if not create it
+
         if (!existsSync(path.dirname(tempFile))) {
           await mkdir(path.dirname(tempFile), { recursive: true })
         }
         await writeFile(tempFile, '', 'utf-8')
 
         args.push(`--temp-file=${tempFile}`)
-        const cucumberClient = spawn('node', [cucumber_client_path, ...args], {
-          env: {
-            ...process.env,
-          },
-        })
+
+        // Determine node path
+        const isFromRecorderApp = process.env.FROM_RECORDER_APP === 'true'
+        const isSupportedPlatform =
+          process.platform === 'darwin' || process.platform === 'win32'
+        const node_path =
+          isFromRecorderApp && isSupportedPlatform ? process.execPath : 'node'
+
+        const envVars: NodeJS.ProcessEnv = {
+          ...process.env,
+          TEMP_FILE_PATH: tempFile,
+        }
+
+        if (node_path === process.execPath) {
+          envVars.ELECTRON_RUN_AS_NODE = '1'
+        }
+
+        const cucumberClient = spawn(
+          node_path,
+          [cucumber_client_path, ...args],
+          {
+            env: envVars,
+          }
+        )
 
         cucumberClient.stdout.on('data', (data) => {
           console.log(data.toString())
@@ -413,7 +451,11 @@ export default class BVTAnalysisFormatter extends Formatter {
   }
 }
 
-export function logReportLink(runId: string, projectId: string, status: JsonTestResult) {
+export function logReportLink(
+  runId: string,
+  projectId: string,
+  status: JsonTestResult
+) {
   let reportLinkBaseUrl = 'https://app.blinq.io'
   if (process.env.NODE_ENV_BLINQ === 'local') {
     reportLinkBaseUrl = 'http://localhost:3000'
@@ -431,7 +473,7 @@ export function logReportLink(runId: string, projectId: string, status: JsonTest
   const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
   globalReportLink = reportLink
   try {
-    publishReportLinkToGuacServer(reportLink, status.status === "PASSED")
+    publishReportLinkToGuacServer(reportLink, status.status === 'PASSED')
   } catch (err) {
     // Error with events, ignoring
   }
