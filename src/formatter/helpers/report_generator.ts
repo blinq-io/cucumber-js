@@ -2,7 +2,9 @@ import * as messages from '@cucumber/messages'
 import fs from 'fs'
 import path from 'path'
 import { RunUploadService } from './upload_serivce'
+import { writeFileSync } from 'fs-extra'
 // type JsonException = messages.Exception
+import objectPath from 'object-path'
 type JsonTimestamp = number //messages.Timestamp
 type JsonStepType = 'Unknown' | 'Context' | 'Action' | 'Outcome' | 'Conjunction'
 
@@ -10,10 +12,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-    ? 'http://localhost:5001/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'stage'
-    ? 'https://stage.api.blinq.io/api/runs'
-    : 'https://api.blinq.io/api/runs'
+      ? 'http://localhost:5001/api/runs'
+      : process.env.NODE_ENV_BLINQ === 'stage'
+        ? 'https://stage.api.blinq.io/api/runs'
+        : process.env.NODE_ENV_BLINQ === 'prod'
+          ? 'https://api.blinq.io/api/runs'
+          : !process.env.NODE_ENV_BLINQ
+            ? 'https://api.blinq.io/api/runs'
+            : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -102,6 +108,9 @@ export type JsonStep = {
   networkData: any[]
   data?: any
   ariaSnapshot: string
+  traceFilePath?: string
+  brunoData?: any
+  interceptResults?: any
 }
 export type RetrainStats = {
   result: JsonTestResult
@@ -121,6 +130,7 @@ export type JsonTestProgress = {
   initialAriaSnapshot?: string
   webLog: any
   networkLog: any
+  logFileId?: string
   env: {
     name: string
     baseUrl: string
@@ -168,6 +178,8 @@ export default class ReportGenerator {
   private runName = ''
   private ariaSnapshot = ''
   private initialAriaSnapshot = ''
+  private testCaseLog: string[] = []
+  private loggingOverridden: boolean = false // Flag to track if logging is overridden
   reportFolder: null | string = null
   private uploadService = new RunUploadService(
     REPORT_SERVICE_URL,
@@ -175,7 +187,8 @@ export default class ReportGenerator {
   )
 
   async handleMessage(
-    envelope: EnvelopeWithMetaMessage | messages.Envelope
+    envelope: EnvelopeWithMetaMessage | messages.Envelope,
+    reRunId?: string
   ): Promise<any> {
     if (envelope.meta && 'runName' in envelope.meta) {
       this.runName = envelope.meta.runName
@@ -204,11 +217,38 @@ export default class ReportGenerator {
       case 'testRunStarted': {
         const testRunStarted = envelope[type]
         this.onTestRunStarted(testRunStarted)
+        await this.uploadService.createStatus('running')
         break
       }
       case 'testCase': {
         const testCase = envelope[type]
+
+        // Initialize the log storage
+        this.testCaseLog = []
+
+        if (!this.loggingOverridden) {
+          this.loggingOverridden = true
+
+          // Store the original process.stdout.write, and process.stderr.write
+          const originalStdoutWrite = process.stdout.write
+          const originalStderrWrite = process.stderr.write
+
+          // Override process.stdout.write
+          process.stdout.write = (chunk: any, ...args: any[]) => {
+            this.testCaseLog.push(chunk.toString())
+            return originalStdoutWrite.call(process.stdout, chunk, ...args)
+          }
+
+          // Override process.stderr.write
+          process.stderr.write = (chunk: any, ...args: any[]) => {
+            this.testCaseLog.push(chunk.toString())
+            return originalStderrWrite.call(process.stderr, chunk, ...args)
+          }
+        }
+
+        // Call the onTestCase method
         this.onTestCase(testCase)
+
         break
       }
       case 'testCaseStarted': {
@@ -233,12 +273,15 @@ export default class ReportGenerator {
       }
       case 'testCaseFinished': {
         const testCaseFinished = envelope[type]
-        return await this.onTestCaseFinished(testCaseFinished)
+
+        // Call the onTestCaseFinished method
+        const result = await this.onTestCaseFinished(testCaseFinished, reRunId)
+        return result
       }
       // case "hook": { break} // After Hook
       case 'testRunFinished': {
         const testRunFinished = envelope[type]
-        this.onTestRunFinished(testRunFinished)
+        await this.onTestRunFinished(testRunFinished)
         break
       }
 
@@ -456,6 +499,28 @@ export default class ReportGenerator {
     if (mediaType === 'application/json') {
       const command: JsonCommand = JSON.parse(body)
       stepProgess.commands.push(command)
+    } else if (mediaType === 'application/json+trace') {
+      const data = JSON.parse(body)
+      stepProgess.traceFilePath = data.traceFilePath
+    }
+
+    if (mediaType === 'application/json+bruno') {
+      try {
+        const data = JSON.parse(body)
+        stepProgess.brunoData = data
+      } catch (error) {
+        console.error('Error parsing bruno data:', error)
+      }
+    }
+
+    if (mediaType === 'application/json+intercept-results') {
+      console.log('Intercept results received:', body)
+      try {
+        const data = JSON.parse(body)
+        stepProgess.interceptResults = data
+      } catch (error) {
+        console.error('Error parsing intercept results:', error)
+      }
     }
   }
   private getFailedTestStepResult({
@@ -560,7 +625,49 @@ export default class ReportGenerator {
     this.stepLogs = []
     if (Object.keys(data).length > 0) {
       stepProgess.data = data
+      const id = testStepFinished.testCaseStartedId
+      const parameters = this.testCaseReportMap.get(id).parameters
+      const _parameters: typeof parameters = {}
+      Object.keys(parameters).map((key) => {
+        if (
+          parameters[key].startsWith('{{') &&
+          parameters[key].endsWith('}}')
+        ) {
+          const path = parameters[key].slice(2, -2).split('.')
+          let value = String(objectPath.get(data, path) ?? parameters[key]);
+          if (value) {
+            if (value.startsWith('secret:')) {
+              value = 'secret:****'
+            } else if (value.startsWith('totp:')) {
+              value = 'totp:****'
+            } else if (value.startsWith('mask:')) {
+              value = 'mask:****'
+            }
+            _parameters[key] = value
+          }
+        } else {
+          _parameters[key] = parameters[key]
+        }
+      })
+      this.report.testCases.find((testCase) => {
+        return testCase.id === id
+      }).parameters = _parameters
     }
+
+    // if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
+    //   this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
+    //   if (!fs.existsSync(this.reportFolder)) {
+    //     fs.mkdirSync(this.reportFolder)
+    //   }
+    //   const reportFilePath = path.join(
+    //     this.reportFolder,
+    //     `report.json`
+    //   )
+    //   writeFileSync(reportFilePath, JSON.stringify(this.report, null, 2))
+    //   return undefined
+    //   // } else {
+    //   // return await this.uploadTestCase(testProgress, reRunId)
+    // }
   }
   getLogFileContent() {
     let projectPath = process.cwd()
@@ -611,7 +718,8 @@ export default class ReportGenerator {
     } as const
   }
   private async onTestCaseFinished(
-    testCaseFinished: messages.TestCaseFinished
+    testCaseFinished: messages.TestCaseFinished,
+    reRunId?: string
   ) {
     const { testCaseStartedId, timestamp } = testCaseFinished
     const testProgress = this.testCaseReportMap.get(testCaseStartedId)
@@ -621,10 +729,14 @@ export default class ReportGenerator {
     }
     const steps = Object.values(testProgress.steps)
     const result = this.getTestCaseResult(steps)
+    if (result.status === 'PASSED' && reRunId) {
+      this.uploadService.updateProjectAnalytics(process.env.PROJECT_ID);
+    }
+    const endTime = this.getTimeStamp(timestamp)
     testProgress.result = {
       ...result,
       startTime: prevResult.startTime,
-      endTime: this.getTimeStamp(timestamp),
+      endTime,
     }
     testProgress.webLog = this.logs
     testProgress.networkLog = this.networkLog
@@ -632,9 +744,61 @@ export default class ReportGenerator {
     this.initialAriaSnapshot = ''
     this.networkLog = []
     this.logs = []
-    return await this.uploadTestCase(testProgress)
+
+    if (this.testCaseLog && this.testCaseLog.length > 0) {
+      // Create the logs directory
+      const logsDir = path.join(this.reportFolder, 'editorLogs')
+      const fileName = `testCaseLog_${testCaseStartedId}.log`
+      const filePath = path.join(logsDir, fileName)
+
+      // Ensure the logs directory exists
+      fs.mkdirSync(logsDir, { recursive: true })
+
+      // Write the logs to the file
+      fs.writeFileSync(filePath, this.testCaseLog.join('\n'), 'utf8')
+
+      // Store this ID in the testProgress object so it can be accessed later
+      testProgress.logFileId = testCaseStartedId
+    }
+    this.testCaseLog = []
+
+    if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
+      this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
+      if (!fs.existsSync(this.reportFolder)) {
+        fs.mkdirSync(this.reportFolder)
+      }
+      const reportFilePath = path.join(
+        this.reportFolder,
+        `${endTime}_${testProgress.scenarioName}.json`
+      )
+      writeFileSync(reportFilePath, JSON.stringify(testProgress, null, 2))
+      return undefined
+    } else {
+      return await this.uploadTestCase(testProgress, reRunId)
+    }
   }
-  private async uploadTestCase(testCase: JsonTestProgress) {
+  private readonly retryCount = 3
+
+  private async uploadTestCase(testCase: JsonTestProgress, rerunId?: string) {
+    let data = null
+    for (let attempt = 1; attempt <= this.retryCount; attempt++) {
+      try {
+        data = await this.tryUpload(testCase, rerunId);
+        break;
+      } catch (e) {
+        console.error(`Attempt ${attempt} to upload testcase failed:`, e);
+        if (attempt === this.retryCount) {
+          console.error('All retry attempts failed, failed to upload testcase.');
+        } else {
+          const waitTime = 1000 * 2 ** (attempt - 1); //? exponential backoff: 1s, 2s, 4s...
+          await new Promise((r) => setTimeout(r, waitTime));
+        }
+      }
+    }
+    return data;
+  }
+
+  private async tryUpload(testCase: JsonTestProgress, rerunId?: string) {
     let runId = ''
     let projectId = ''
     if (!process.env.UPLOADING_TEST_CASE) {
@@ -643,7 +807,6 @@ export default class ReportGenerator {
     const anyRemArr = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
     const randomID = Math.random().toString(36).substring(7)
     anyRemArr.push(randomID)
-    let data
     process.env.UPLOADING_TEST_CASE = JSON.stringify(anyRemArr)
     try {
       if (
@@ -662,45 +825,51 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
-      data = await this.uploadService.uploadTestCase(
+      const data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
         projectId,
-        this.reportFolder
+        this.reportFolder,
+        rerunId
       )
       this.writeTestCaseReportToDisk(testCase)
-    } catch (e) {
-      console.error('Error uploading test case:', e)
+      return data
     } finally {
       const arrRem = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
       arrRem.splice(arrRem.indexOf(randomID), 1)
       process.env.UPLOADING_TEST_CASE = JSON.stringify(arrRem)
     }
-    return data ? data : null
   }
+
   private writeTestCaseReportToDisk(testCase: JsonTestProgress) {
+    const reportFolder =
+      this.reportFolder ?? process.env.TESTCASE_REPORT_FOLDER_PATH
+    if (!reportFolder) {
+      console.error('Report folder is not defined')
+      return
+    }
     try {
       let i = 0
-      while (fs.existsSync(path.join(this.reportFolder, `${i}`))) {
+      while (fs.existsSync(path.join(reportFolder, `${i}`))) {
         i++
       }
-      fs.mkdirSync(path.join(this.reportFolder, `${i}`))
+      fs.mkdirSync(path.join(reportFolder, `${i}`))
       //exclude network log from the saved report
       const networkLog = testCase.networkLog
       delete testCase.networkLog
       fs.writeFileSync(
-        path.join(this.reportFolder, `${i}`, `report.json`),
+        path.join(reportFolder, `${i}`, `report.json`),
         JSON.stringify(testCase, null, 2)
       )
       fs.writeFileSync(
-        path.join(this.reportFolder, `${i}`, `network.json`),
+        path.join(reportFolder, `${i}`, `network.json`),
         JSON.stringify(networkLog, null, 2)
       )
     } catch (error) {
       console.error('Error writing test case report to disk:', error)
     }
   }
-  private onTestRunFinished(testRunFinished: messages.TestRunFinished) {
+  private async onTestRunFinished(testRunFinished: messages.TestRunFinished) {
     const { timestamp, success, message } = testRunFinished
     const prevResult = this.report.result as {
       status: 'STARTED'
@@ -713,5 +882,6 @@ export default class ReportGenerator {
       message,
       // exception,
     }
+    await this.uploadService.createStatus(success ? 'passed' : 'failed')
   }
 }

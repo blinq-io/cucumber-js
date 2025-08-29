@@ -5,6 +5,7 @@ import * as messages from '@cucumber/messages'
 import { ITestCaseAttempt } from './helpers/event_data_collector'
 import { formatUndefinedParameterTypes } from './helpers/issue_helpers'
 import { durationBetweenTimestamps } from '../time'
+import { globalReportLink } from './bvt_analysis_formatter'
 
 interface ILogIssuesRequest {
   issues: ITestCaseAttempt[]
@@ -67,6 +68,9 @@ export default class SummaryFormatter extends Formatter {
     }
     if (warnings.length > 0) {
       this.logIssues({ issues: warnings, title: 'Warnings' })
+    }
+    if (globalReportLink) {
+      console.log(`Report link: ${globalReportLink}\n`);
     }
     this.log(
       formatSummary({

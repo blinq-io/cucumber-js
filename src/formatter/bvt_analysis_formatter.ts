@@ -22,6 +22,10 @@ import {
   FinishTestCaseResponse,
   RootCauseProps,
 } from './helpers/upload_serivce'
+import { promisify } from 'util'
+import { exec } from 'child_process'
+import { isCloudRecorder } from './helpers/isCloudRecorder'
+
 //User token
 const TOKEN = process.env.TOKEN
 interface MetaMessage extends Meta {
@@ -31,13 +35,18 @@ interface MetaMessage extends Meta {
 interface EnvelopeWithMetaMessage extends Envelope {
   meta: MetaMessage
 }
+export let globalReportLink = '';
 export default class BVTAnalysisFormatter extends Formatter {
   static reportGenerator: ReportGenerator
+  static reRunFailedStepsIndex:
+    | { testCaseId: string; failedStepIndex: number }[]
+    | null
   private reportGenerator = new ReportGenerator()
   private uploader = new ReportUploader(this.reportGenerator)
   private exit = false
   private START: number
   private runName: string
+  private failedStepsIndex: { testCaseId: string; failedStepIndex: number }[]
   private summaryFormatter: SummaryFormatter
   private rootCauseArray: {
     rootCause: RootCauseProps
@@ -49,6 +58,11 @@ export default class BVTAnalysisFormatter extends Formatter {
     this.summaryFormatter = new SummaryFormatter(options)
     BVTAnalysisFormatter.reportGenerator = this.reportGenerator
     this.rootCauseArray = []
+    this.failedStepsIndex = []
+    BVTAnalysisFormatter.reRunFailedStepsIndex = process.env.RERUN
+      ? JSON.parse(process.env.RERUN)
+      : null
+
     if (!TOKEN && process.env.BVT_FORMATTER === 'ANALYSIS') {
       throw new Error('TOKEN must be set')
     }
@@ -64,11 +78,15 @@ export default class BVTAnalysisFormatter extends Formatter {
               `Root cause: ${rootCause.failClass}\n${rootCause.analysis}\nfailing step: ${rootCause.failedStep}`
             )
             this.rootCauseArray.push({ rootCause, report })
+            this.failedStepsIndex.push({
+              testCaseId: report.id,
+              failedStepIndex: rootCause.failedStep,
+            })
           }
           return
         }
-
         await this.reportGenerator.handleMessage(envelope)
+
         if (
           doesHaveValue(envelope.meta) &&
           doesHaveValue(envelope.meta.runName)
@@ -157,10 +175,9 @@ export default class BVTAnalysisFormatter extends Formatter {
     }
 
     //checking if the type of report.result is JsonResultFailed or not
+
     this.log('Some tests failed, starting the retraining...\n')
     await this.processTestCases()
-    await this.rerun()
-
     if (this.reportGenerator.getReport().result.status === 'FAILED') {
       process.exit(1)
     }
@@ -176,6 +193,20 @@ export default class BVTAnalysisFormatter extends Formatter {
     report: JsonTestProgress
   ) {
     const failedTestSteps = rootCause.failedStep
+
+    if (
+      BVTAnalysisFormatter.reRunFailedStepsIndex &&
+      BVTAnalysisFormatter.reRunFailedStepsIndex.length > 0
+    ) {
+      const previousRun = BVTAnalysisFormatter.reRunFailedStepsIndex[0]
+      if (previousRun.failedStepIndex === failedTestSteps) {
+        console.log('Same step has failed again, skipping retraining')
+        BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
+        return
+      }
+      BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
+    }
+
     const retrainStats = await this.retrain(failedTestSteps, report)
 
     if (!retrainStats) {
@@ -186,6 +217,8 @@ export default class BVTAnalysisFormatter extends Formatter {
       ...report,
       retrainStats,
     })
+
+    await this.rerun(report)
   }
 
   private async uploadFinalReport(finalReport: JsonReport) {
@@ -195,7 +228,7 @@ export default class BVTAnalysisFormatter extends Formatter {
         finalReport,
         this.runName
       )
-      logReportLink(runId, projectId)
+      logReportLink(runId, projectId, finalReport.result)
     } catch (err) {
       this.log('Error uploading report\n')
       if ('stack' in err) {
@@ -232,29 +265,66 @@ export default class BVTAnalysisFormatter extends Formatter {
     return await this.call_cucumber_client(failedTestCases, testCase)
   }
 
-  private async rerun() {
+  private async rerun(report: JsonTestProgress) {
     await new Promise<void>((resolve) => {
-      const node_path = process.argv.shift()
-      const args = process.argv
-      const cucumberClient = spawn(node_path, args, {
-        env: {
-          ...process.env,
-        },
-      })
-
-      cucumberClient.stdout.on('data', (data) => {
-        console.log(data.toString())
-      })
-
-      cucumberClient.stderr.on('data', (data) => {
-        console.error(data.toString())
-      })
-
-      cucumberClient.on('close', () => {
-        resolve()
-      })
-    })
+      // Default to system Node.js
+      let node_path = process.argv.shift();
+  
+      // Use bundled Node if running from recorder app on macOS or Windows
+      const isFromRecorderApp = process.env.FROM_RECORDER_APP === "true";
+      const isSupportedPlatform = process.platform === "darwin" || process.platform === "win32";
+  
+      if (isFromRecorderApp && isSupportedPlatform) {
+        node_path = process.execPath;
+      }
+  
+      const args = [
+        path.join(
+          process.cwd(),
+          "node_modules",
+          "@dev-blinq",
+          "cucumber-js",
+          "bin",
+          "cucumber.js"
+        ),
+        "--name",
+        `^${report.scenarioName}$`,
+        "--exit",
+        "--format",
+        "bvt",
+        "--run-name",
+        `${report.scenarioName}@debug`,
+        path.join(process.cwd(), report.uri),
+      ];
+  
+      const envVars: NodeJS.ProcessEnv = {
+        ...process.env,
+        RERUN: JSON.stringify(this.failedStepsIndex),
+      };
+  
+      // Inject Electron node env only if using bundled node
+      if (node_path === process.execPath) {
+        envVars.ELECTRON_RUN_AS_NODE = "1";
+      }
+  
+      const cucumberClient = spawn(node_path!, args, {
+        env: envVars,
+      });
+  
+      cucumberClient.stdout.on("data", (data) => {
+        console.log(data.toString());
+      });
+  
+      cucumberClient.stderr.on("data", (data) => {
+        console.error(data.toString());
+      });
+  
+      cucumberClient.on("close", () => {
+        resolve();
+      });
+    });
   }
+  
 
   private async call_cucumber_client(
     stepsToRetrain: number,
@@ -263,80 +333,101 @@ export default class BVTAnalysisFormatter extends Formatter {
     return new Promise((resolve, reject) => {
       const cucumber_client_path = path.resolve(
         process.cwd(),
-        'node_modules',
-        '@dev-blinq',
-        'cucumber_client',
-        'bin',
-        'client',
-        'cucumber.js'
-      )
-
+        "node_modules",
+        "@dev-blinq",
+        "cucumber_client",
+        "bin",
+        "client",
+        "cucumber.js"
+      );
+  
       const args: string[] = [
         process.cwd(),
         path.join(process.cwd(), testCase.uri),
         `${testCase.scenarioName}`,
-        'undefined',
+        "undefined",
         `${stepsToRetrain},`,
-      ]
-
+      ];
+  
       if (process.env.BLINQ_ENV) {
-        args.push(`--env=${process.env.BLINQ_ENV}`)
+        args.push(`--env=${process.env.BLINQ_ENV}`);
       }
-
-      if (!existsSync(path.join(this.getAppDataDir(), 'blinq.io', '.temp'))) {
-        mkdir(path.join(this.getAppDataDir(), 'blinq.io', '.temp'), {
+  
+      if (!existsSync(path.join(this.getAppDataDir(), "blinq.io", ".temp"))) {
+        mkdir(path.join(this.getAppDataDir(), "blinq.io", ".temp"), {
           recursive: true,
-        })
+        });
       }
-
+  
       tmpName(async (err, name) => {
         const tempFile = path.join(
           this.getAppDataDir(),
-          'blinq.io',
-          '.temp',
+          "blinq.io",
+          ".temp",
           path.basename(name)
-        )
-        console.log('File path: ', tempFile)
-        await writeFile(tempFile, '', 'utf-8')
-
-        args.push(`--temp-file=${tempFile}`)
-        const cucumberClient = spawn('node', [cucumber_client_path, ...args], {
-          env: {
-            ...process.env,
-            TEMP_FILE_PATH: tempFile,
-          },
-        })
-
-        cucumberClient.stdout.on('data', (data) => {
-          console.log(data.toString())
-        })
-
-        cucumberClient.stderr.on('data', (data) => {
-          console.error(data.toString())
-        })
-
-        cucumberClient.on('close', async (code) => {
+        );
+        console.log("File path: ", tempFile);
+  
+        if (!existsSync(path.dirname(tempFile))) {
+          await mkdir(path.dirname(tempFile), { recursive: true });
+        }
+        await writeFile(tempFile, "", "utf-8");
+  
+        args.push(`--temp-file=${tempFile}`);
+  
+        // Determine node path
+        const isFromRecorderApp = process.env.FROM_RECORDER_APP === "true";
+        const isSupportedPlatform =
+          process.platform === "darwin" || process.platform === "win32";
+        const node_path =
+          isFromRecorderApp && isSupportedPlatform
+            ? process.execPath
+            : "node";
+  
+        const envVars: NodeJS.ProcessEnv = {
+          ...process.env,
+          TEMP_FILE_PATH: tempFile,
+        };
+  
+        if (node_path === process.execPath) {
+          envVars.ELECTRON_RUN_AS_NODE = "1";
+        }
+  
+        const cucumberClient = spawn(node_path, [cucumber_client_path, ...args], {
+          env: envVars,
+        });
+  
+        cucumberClient.stdout.on("data", (data) => {
+          console.log(data.toString());
+        });
+  
+        cucumberClient.stderr.on("data", (data) => {
+          console.error(data.toString());
+        });
+  
+        cucumberClient.on("close", async (code) => {
           if (code === 0) {
-            const reportData = readFileSync(tempFile, 'utf-8')
-            const retrainStats = JSON.parse(reportData) as RetrainStats
-            await unlink(tempFile)
-            resolve(retrainStats)
+            const reportData = readFileSync(tempFile, "utf-8");
+            const retrainStats = JSON.parse(reportData) as RetrainStats;
+            await unlink(tempFile);
+            resolve(retrainStats);
           } else {
-            this.log('Error retraining\n')
+            this.log("Error retraining\n");
             try {
-              const reportData = readFileSync(tempFile, 'utf-8')
-              const retrainStats = JSON.parse(reportData) as RetrainStats
-              await unlink(tempFile)
-              resolve(retrainStats)
+              const reportData = readFileSync(tempFile, "utf-8");
+              const retrainStats = JSON.parse(reportData) as RetrainStats;
+              await unlink(tempFile);
+              resolve(retrainStats);
             } catch (e) {
-              this.log('Error  reading scenario report\n ' + e)
-              resolve(null)
+              this.log("Error  reading scenario report\n " + e);
+              resolve(null);
             }
           }
-        })
-      })
-    })
+        });
+      });
+    });
   }
+  
 
   private getAppDataDir() {
     if (process.env.BLINQ_APPDATA_DIR) {
@@ -360,7 +451,7 @@ export default class BVTAnalysisFormatter extends Formatter {
   }
 }
 
-export function logReportLink(runId: string, projectId: string) {
+export function logReportLink(runId: string, projectId: string, status: JsonTestResult) {
   let reportLinkBaseUrl = 'https://app.blinq.io'
   if (process.env.NODE_ENV_BLINQ === 'local') {
     reportLinkBaseUrl = 'http://localhost:3000'
@@ -368,7 +459,26 @@ export function logReportLink(runId: string, projectId: string) {
     reportLinkBaseUrl = 'https://dev.app.blinq.io'
   } else if (process.env.NODE_ENV_BLINQ === 'stage') {
     reportLinkBaseUrl = 'https://stage.app.blinq.io'
+  } else if (process.env.NODE_ENV_BLINQ === 'prod') {
+    reportLinkBaseUrl = 'https://app.blinq.io'
+  } else if (!process.env.NODE_ENV_BLINQ) {
+    reportLinkBaseUrl = 'https://app.blinq.io'
+  } else {
+    reportLinkBaseUrl = process.env.NODE_ENV_BLINQ.replace('api', 'app')
   }
   const reportLink = `${reportLinkBaseUrl}/${projectId}/run-report/${runId}`
-  console.log(`Report link: ${reportLink}\n`)
+  globalReportLink = reportLink;
+  try {
+    publishReportLinkToGuacServer(reportLink, status.status === "PASSED")
+  } catch (err) {
+    // Error with events, ignoring
+  }
+  return reportLink;
+}
+
+function publishReportLinkToGuacServer(reportLink: string, result: boolean) {
+  if (existsSync('/tmp/report_publish.sh')) {
+    const execAsync = promisify(exec)
+    execAsync('sh /tmp/report_publish.sh ' + reportLink + ' ' + result)
+  }
 }

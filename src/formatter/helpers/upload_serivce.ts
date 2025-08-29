@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import FormData from 'form-data'
-import { createReadStream, existsSync } from 'fs'
+import { createReadStream, existsSync, write, writeFileSync } from 'fs'
 import fs from 'fs/promises'
 
 import { JsonReport, JsonTestProgress } from './report_generator'
@@ -59,6 +59,24 @@ class RunUploadService {
         process.exit(1)
       }
       throw new Error('Failed to create run document in the server: ' + error)
+    }
+  }
+  async updateProjectAnalytics(projectId: string) {
+    try {
+      await axiosClient.post(
+        this.runsApiBaseURL + '/project/updateAIRecoveryCount',
+        {
+          projectId,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + this.accessToken,
+            'x-source': 'cucumber_js',
+          },
+        }
+      )
+    } catch (error) {
+      console.error('Failed to update project metadata:', error)
     }
   }
   async upload(formData: FormData) {
@@ -124,7 +142,8 @@ class RunUploadService {
     testCaseReport: JsonTestProgress,
     runId: string,
     projectId: string,
-    reportFolder: string
+    reportFolder: string,
+    rerunId?: string
   ) {
     const fileUris = []
     //iterate over all the files in the JsonCommand.screenshotId and insert them into the fileUris array
@@ -136,7 +155,16 @@ class RunUploadService {
           )
         }
       }
+      if (step.traceFilePath) {
+        fileUris.push('trace' + '/' + step.traceFilePath)
+      }
     }
+    if (testCaseReport.logFileId) {
+      fileUris.push(
+        'editorLogs' + '/' + 'testCaseLog_' + testCaseReport.logFileId + '.log'
+      )
+    }
+    // console.log({ fileUris })
     const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
     //upload all the files in the fileUris array
     try {
@@ -150,6 +178,15 @@ class RunUploadService {
             .filter((fileUri) => preSignedUrls[fileUri])
             .map(async (fileUri) => {
               for (let j = 0; j < MAX_RETRIES; j++) {
+                if (existsSync(path.join(reportFolder, fileUri))) {
+                  const success = await this.uploadFile(
+                    path.join(reportFolder, fileUri),
+                    preSignedUrls[fileUri]
+                  )
+                  if (success) {
+                    return
+                  }
+                }
                 const success = await this.uploadFile(
                   path.join(reportFolder, fileUri),
                   preSignedUrls[fileUri]
@@ -162,14 +199,17 @@ class RunUploadService {
             })
         )
       }
+
+      // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
       const { data } = await axiosClient.post<FinishTestCaseResponse>(
         this.runsApiBaseURL + '/cucumber-runs/createNewTestCase',
         {
           runId,
           projectId,
           testProgressReport: testCaseReport,
-          mode: process.env.MODE === 'cloud' ? 'cloud' : 'local',
           browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
+          mode: process.env.MODE === 'cloud' ? 'cloud' : (process.env.MODE === 'executions' ? 'executions' : 'local'),
+          rerunId,
         },
         {
           headers: {
@@ -196,7 +236,7 @@ class RunUploadService {
       } catch (error) {
         // no event tracking
       }
-      logReportLink(runId, projectId)
+      logReportLink(runId, projectId, testCaseReport.result)
       return data
     } catch (e) {
       console.error(`failed to upload the test case: ${testCaseReport.id} ${e}`)
@@ -232,8 +272,8 @@ class RunUploadService {
       {
         runId,
         projectId,
-        mode: process.env.MODE === 'cloud' ? 'cloud' : 'local',
         browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
+        mode: process.env.MODE === 'cloud' ? 'cloud' : (process.env.MODE === 'executions' ? 'executions' : 'local'),
       },
       {
         headers: {
@@ -293,11 +333,34 @@ class RunUploadService {
       if (res.data.status !== true) {
         throw new Error('')
       }
-      logReportLink(runId, projectId)
+      logReportLink(runId, projectId, testProgressReport.result)
     } catch (e) {
       console.error(
         `failed to modify the test case: ${testProgressReport.id} ${e}`
       )
+    }
+  }
+  async createStatus(status: string) {
+    if (!process.env.UUID) {
+      return
+    }
+
+    try {
+      await axiosClient.post(
+        this.runsApiBaseURL + '/scenarios/status',
+        {
+          status: { status },
+          uuid: process.env.UUID,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + this.accessToken,
+            'x-source': 'cucumber_js',
+          },
+        }
+      )
+    } catch (error) {
+      console.log('Failed to send status to the server, ignoring it')
     }
   }
 }

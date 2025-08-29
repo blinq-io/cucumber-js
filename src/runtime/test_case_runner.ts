@@ -258,11 +258,18 @@ export default class TestCaseRunner {
         willBeRetried,
       },
     }
+
+    const rerunId = BVTAnalysisFormatter.reRunFailedStepsIndex
+      ? BVTAnalysisFormatter.reRunFailedStepsIndex[0].testCaseId
+      : null
+
     const data = BVTAnalysisFormatter.reportGenerator
       ? await BVTAnalysisFormatter.reportGenerator.handleMessage(
-          testCaseFinished
+          testCaseFinished,
+          rerunId
         )
       : null
+
     this.eventBroadcaster.emit('envelope', testCaseFinished, data)
 
     return willBeRetried
