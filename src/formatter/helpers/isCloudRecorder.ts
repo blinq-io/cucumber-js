@@ -1,7 +1,7 @@
-import { existsSync } from "fs";
+import { existsSync } from 'fs'
 
 const isCloudRecorderFunc = () => {
-  return existsSync("/tmp/pod_publish.sh");
-};
+  return existsSync('/tmp/pod_publish.sh')
+}
 
-export const isCloudRecorder = isCloudRecorderFunc();
+export const isCloudRecorder = isCloudRecorderFunc()

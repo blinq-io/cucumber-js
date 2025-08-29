@@ -29,7 +29,10 @@ export interface FinishTestCaseResponse {
 }
 
 class RunUploadService {
-  constructor(private runsApiBaseURL: string, private accessToken: string) {}
+  constructor(
+    private runsApiBaseURL: string,
+    private accessToken: string
+  ) {}
   async createRunDocument(name: string) {
     try {
       const runDocResult = await axiosClient.post(
@@ -208,7 +211,12 @@ class RunUploadService {
           projectId,
           testProgressReport: testCaseReport,
           browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-          mode: process.env.MODE === 'cloud' ? 'cloud' : (process.env.MODE === 'executions' ? 'executions' : 'local'),
+          mode:
+            process.env.MODE === 'cloud'
+              ? 'cloud'
+              : process.env.MODE === 'executions'
+                ? 'executions'
+                : 'local',
           rerunId,
         },
         {
@@ -273,7 +281,12 @@ class RunUploadService {
         runId,
         projectId,
         browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-        mode: process.env.MODE === 'cloud' ? 'cloud' : (process.env.MODE === 'executions' ? 'executions' : 'local'),
+        mode:
+          process.env.MODE === 'cloud'
+            ? 'cloud'
+            : process.env.MODE === 'executions'
+              ? 'executions'
+              : 'local',
       },
       {
         headers: {
