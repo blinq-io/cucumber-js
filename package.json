@@ -14,7 +14,6 @@
   "contributors": [
     "blinq.io"
   ],
-  
   "repository": {
     "type": "git",
     "url": "git@github.com:blinq-io/cucumber-js.git"
