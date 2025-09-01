@@ -1,5 +1,6 @@
 import axios from 'axios'
 import tunnel from 'tunnel'
+import { axiosClient } from '../configuration/axios_client'
 
 const getSSoUrl = () => {
   switch (process.env.NODE_ENV_BLINQ) {
@@ -43,11 +44,19 @@ const getProxy = () => {
 const getProjectByAccessKey = async (access_key: string) => {
   const ssoUrl = getSSoUrl()
   const accessKeyUrl = `${ssoUrl}/getProjectByAccessKey`
+
+  const response = await axiosClient.post(accessKeyUrl, {
+    access_key,
+  })
+
+  /*
   const response = await axios.post(accessKeyUrl, {
     access_key,
     httpAgent: getProxy(),
     proxy: false,
   })
+  */
+
   if (response.status !== 200) {
     console.error('Error: Invalid access key')
     process.exit(1)
