@@ -633,7 +633,7 @@ export default class ReportGenerator {
           parameters[key].endsWith('}}')
         ) {
           const path = parameters[key].slice(2, -2).split('.')
-          let value = String(objectPath.get(data, path) ?? parameters[key]);
+          let value = String(objectPath.get(data, path) ?? parameters[key])
           if (value) {
             if (value.startsWith('secret:')) {
               value = 'secret:****'
@@ -729,7 +729,7 @@ export default class ReportGenerator {
     const steps = Object.values(testProgress.steps)
     const result = this.getTestCaseResult(steps)
     if (result.status === 'PASSED' && reRunId) {
-      this.uploadService.updateProjectAnalytics(process.env.PROJECT_ID);
+      this.uploadService.updateProjectAnalytics(process.env.PROJECT_ID)
     }
     const endTime = this.getTimeStamp(timestamp)
     testProgress.result = {
@@ -782,19 +782,19 @@ export default class ReportGenerator {
     let data = null
     for (let attempt = 1; attempt <= this.retryCount; attempt++) {
       try {
-        data = await this.tryUpload(testCase, rerunId);
-        break;
+        data = await this.tryUpload(testCase, rerunId)
+        break
       } catch (e) {
-        console.error(`Attempt ${attempt} to upload testcase failed:`, e);
+        console.error(`Attempt ${attempt} to upload testcase failed:`, e)
         if (attempt === this.retryCount) {
-          console.error('All retry attempts failed, failed to upload testcase.');
+          console.error('All retry attempts failed, failed to upload testcase.')
         } else {
-          const waitTime = 1000 * 2 ** (attempt - 1); //? exponential backoff: 1s, 2s, 4s...
-          await new Promise((r) => setTimeout(r, waitTime));
+          const waitTime = 1000 * 2 ** (attempt - 1) //? exponential backoff: 1s, 2s, 4s...
+          await new Promise((r) => setTimeout(r, waitTime))
         }
       }
     }
-    return data;
+    return data
   }
 
   private async tryUpload(testCase: JsonTestProgress, rerunId?: string) {
