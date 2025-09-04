@@ -82,7 +82,7 @@ export default class Cli {
         },
         environment
       )
-      console.log('Configuration loaded successfully.')
+    console.log('Configuration loaded successfully.')
     const { success } = await runCucumber(runConfiguration, environment)
     return {
       shouldExitImmediately: configuration.forceExit,
