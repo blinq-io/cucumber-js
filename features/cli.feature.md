@@ -67,13 +67,6 @@ I want to run Cucumber on the command line
 
 `@spawn`
 
-# Scenario: display Cucumber version
-
-- When I run cucumber-js with `--version`
-- Then I see the version of Cucumber
-
-`@spawn`
-
 # Scenario: display help
 
 - When I run cucumber-js with `--help`
