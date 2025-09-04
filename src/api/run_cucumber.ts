@@ -26,6 +26,7 @@ export async function runCucumber(
   environment: IRunEnvironment = {},
   onMessage?: (message: Envelope) => void
 ): Promise<IRunResult> {
+  console.log('Running Cucumber...')
   const { cwd, stdout, stderr, env, debug } = mergeEnvironment(environment)
   const logger: ILogger = new ConsoleLogger(stderr, debug)
 
