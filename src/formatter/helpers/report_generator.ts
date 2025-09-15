@@ -696,6 +696,12 @@ export default class ReportGenerator {
     }
   }
   private getTestCaseResult(steps: JsonStep[]) {
+    if (steps[0] && steps[0].result.status === 'SKIPPED') {
+      return {
+        status: 'FAILED',
+        message: "Test skipped due to failure in before hooks"
+      } as const
+    }
     for (const step of steps) {
       switch (step.result.status) {
         case 'FAILED':
