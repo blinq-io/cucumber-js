@@ -699,7 +699,7 @@ export default class ReportGenerator {
     if (steps[0] && steps[0].result.status === 'SKIPPED') {
       return {
         status: 'FAILED',
-        message: "Test skipped due to failure in before hooks"
+        message: 'Test skipped due to failure in before hooks',
       } as const
     }
     for (const step of steps) {
