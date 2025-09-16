@@ -218,6 +218,7 @@ class RunUploadService {
                 ? 'executions'
                 : 'local',
           rerunId,
+          branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
         },
         {
           headers: {
@@ -287,6 +288,7 @@ class RunUploadService {
             : process.env.MODE === 'executions'
               ? 'executions'
               : 'local',
+        branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
       },
       {
         headers: {
