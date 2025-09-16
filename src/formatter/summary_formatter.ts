@@ -70,7 +70,7 @@ export default class SummaryFormatter extends Formatter {
       this.logIssues({ issues: warnings, title: 'Warnings' })
     }
     if (globalReportLink) {
-      console.log(`Report link: ${globalReportLink}\n`);
+      console.log(`Report link: ${globalReportLink}\n`)
     }
     this.log(
       formatSummary({

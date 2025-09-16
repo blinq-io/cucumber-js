@@ -4,7 +4,10 @@ import { ILogger } from '../logger'
 
 export class ConsoleLogger implements ILogger {
   private console: Console = new Console(this.stream)
-  constructor(private stream: Writable, private debugEnabled: boolean) {}
+  constructor(
+    private stream: Writable,
+    private debugEnabled: boolean
+  ) {}
 
   debug(...content: any[]): void {
     if (this.debugEnabled) {

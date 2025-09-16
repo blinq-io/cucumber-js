@@ -14,7 +14,6 @@
   "contributors": [
     "blinq.io"
   ],
-  
   "repository": {
     "type": "git",
     "url": "git@github.com:blinq-io/cucumber-js.git"
@@ -165,6 +164,7 @@
   },
   "scripts": {
     "build-local": "genversion --es6 src/version.ts && tsc --build tsconfig.node.json && shx cp src/importer.js lib/ && shx cp src/wrapper.mjs lib/ && shx cp src/api/wrapper.mjs lib/api/",
+    "build:watch": "genversion --es6 src/version.ts && tsc --build tsconfig.node.json --watch && shx cp src/importer.js lib/ && shx cp src/wrapper.mjs lib/ && shx cp src/api/wrapper.mjs lib/api/",
     "cck-test": "mocha 'compatibility/**/*_spec.ts'",
     "docs:ci": "api-extractor run --verbose",
     "docs:local": "api-extractor run --verbose --local && api-documenter markdown --input-folder ./tmp/api-extractor --output-folder ./docs/api",
