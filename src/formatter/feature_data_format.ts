@@ -114,7 +114,7 @@ const generateTestData = (
   }
 }
 
-let globalFaker : any = null;
+let globalFaker: any = null
 
 const getFakeString = (content: string) => {
   // content example: helpers.fromRegExp('#{2,9}')
@@ -125,10 +125,10 @@ const getFakeString = (content: string) => {
     content.lastIndexOf(')')
   )
   // argument example: '#{2,9}'
-  let faker = globalFaker;
+  let faker = globalFaker
   if (!faker) {
-    faker = tryRequire('@faker-js/faker/locale/en_US');
-    globalFaker = faker;
+    faker = tryRequire('@faker-js/faker/locale/en_US')
+    globalFaker = faker
   }
   let fakeFunc: any = faker
   faking.forEach((f: string) => {
