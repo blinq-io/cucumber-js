@@ -1,8 +1,9 @@
-import { faker } from '@faker-js/faker'
+// import { faker } from '@faker-js/faker' // it is taking more time to load the module
 import fs from 'fs'
 import path from 'path'
 import { TableCell } from '@cucumber/messages'
 import JSON5 from 'json5'
+import tryRequire from '../try_require'
 
 const generateTestData = (
   featureFileContent: string,
@@ -113,6 +114,8 @@ const generateTestData = (
   }
 }
 
+let globalFaker: any = null
+
 const getFakeString = (content: string) => {
   // content example: helpers.fromRegExp('#{2,9}')
   const faking = content.split('(')[0].split('.')
@@ -122,7 +125,11 @@ const getFakeString = (content: string) => {
     content.lastIndexOf(')')
   )
   // argument example: '#{2,9}'
-
+  let faker = globalFaker
+  if (!faker) {
+    faker = tryRequire('@faker-js/faker/locale/en_US')
+    globalFaker = faker
+  }
   let fakeFunc: any = faker
   faking.forEach((f: string) => {
     fakeFunc = fakeFunc[f]
