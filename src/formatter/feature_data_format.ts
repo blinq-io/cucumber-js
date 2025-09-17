@@ -145,7 +145,7 @@ const getFakeString = (content: string) => {
     return fakeFunc(JSON5.parse(argument))
   } catch (error) {
     if (!argument) {
-      return fakeFunc( )
+      return fakeFunc()
     }
 
     return fakeFunc(argument)
