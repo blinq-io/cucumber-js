@@ -39,7 +39,6 @@ export default class Cli {
   }
 
   async run(): Promise<ICliRunResult> {
-    console.log('Running CLI...')
     const debugEnabled = debug.enabled('cucumber')
     if (debugEnabled) {
       await validateInstall()
@@ -82,7 +81,6 @@ export default class Cli {
         },
         environment
       )
-    console.log('Configuration loaded successfully.')
     const { success } = await runCucumber(runConfiguration, environment)
     return {
       shouldExitImmediately: configuration.forceExit,

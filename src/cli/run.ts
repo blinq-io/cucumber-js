@@ -12,7 +12,6 @@ function logErrorMessageAndExit(message: string): void {
 }
 
 export default async function run(): Promise<void> {
-  console.log('Running CLI...')
   validateNodeEngineVersion(
     process.version,
     (error) => {
@@ -21,7 +20,6 @@ export default async function run(): Promise<void> {
     },
     console.warn
   )
-  console.log('Node engine version is valid.')
 
   const cli = new Cli({
     argv: process.argv,
