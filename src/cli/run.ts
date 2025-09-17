@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 /* This is one rare place where we're fine to use process/console directly,
  * but other code abstracts those to remain composable and testable. */
+console.log('Loading necessary packages...')
 import Cli, { ICliRunResult } from './'
 import VError from 'verror'
 import { validateNodeEngineVersion } from './validate_node_engine_version'
