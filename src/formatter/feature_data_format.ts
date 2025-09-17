@@ -127,7 +127,7 @@ const getFakeString = (content: string) => {
   // argument example: '#{2,9}'
   let faker = globalFaker
   if (!faker) {
-    faker = tryRequire('@faker-js/faker/locale/en_US')
+    faker = tryRequire('@faker-js/faker/locale/en_US').faker
     globalFaker = faker
   }
   let fakeFunc: any = faker
