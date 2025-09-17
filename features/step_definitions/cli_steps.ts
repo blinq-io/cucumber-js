@@ -158,7 +158,7 @@ Then(
 
 Then('I see the version of Cucumber', function (this: World) {
   const actualOutput = this.lastRun.output
-  const expectedOutput = `${version as string}\n`
+  const expectedOutput = `${'Loading necessary packages...'}\n${version as string}\n`
   expect(actualOutput).to.eql(expectedOutput)
 })
 
