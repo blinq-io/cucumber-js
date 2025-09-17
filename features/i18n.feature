@@ -25,6 +25,7 @@ Feature: internationalization
     When I run cucumber-js with `--i18n-keywords ja`
     Then it outputs the text:
       """
+      Loading necessary packages...
       ENGLISH KEYWORD  | NATIVE KEYWORDS
       Feature          | "フィーチャ", "機能"
       Rule             | "ルール"
