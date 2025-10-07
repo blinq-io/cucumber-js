@@ -39,6 +39,7 @@ class RunUploadService {
         this.runsApiBaseURL + '/cucumber-runs/create',
         {
           name: name ? name : 'TEST',
+          branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
         },
         {
           headers: {
