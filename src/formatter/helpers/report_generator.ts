@@ -6,7 +6,14 @@ import { writeFileSync } from 'fs-extra'
 // type JsonException = messages.Exception
 import objectPath from 'object-path'
 type JsonTimestamp = number //messages.Timestamp
-type JsonStepType = 'Unknown' | 'Context' | 'Action' | 'Outcome' | 'Conjunction'
+type JsonStepType =
+  | 'Unknown'
+  | 'Context'
+  | 'Action'
+  | 'Outcome'
+  | 'Conjunction'
+  | 'After'
+  | 'Before'
 
 const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
@@ -555,6 +562,36 @@ export default class ReportGenerator {
     const testStep = this.testStepMap.get(testStepId)
     if (testStep.pickleStepId === undefined) {
       if (testStepResult.status === 'FAILED') {
+        const testCase = this.testCaseReportMap.get(
+          testStepFinished.testCaseStartedId
+        )
+        const type =
+          testCase.steps[0].result.status === 'UNKNOWN' ? 'Before' : 'After'
+
+        const hookStep: JsonStep = {
+          ariaSnapshot: null,
+          commands: [],
+          keyword: type,
+          data: {},
+          networkData: [],
+          result: {
+            status: 'FAILED',
+            message: testStepResult.message,
+            startTime: this.getTimeStamp(timestamp),
+            endTime: this.getTimeStamp(timestamp),
+          },
+          text: 'Failed hook',
+          type,
+          webLog: [],
+        }
+
+        if (type === 'Before') {
+          testCase.steps = [hookStep, ...testCase.steps]
+        } else {
+          testCase.steps = [...testCase.steps, hookStep]
+        }
+
+        this.testCaseReportMap.set(testStepFinished.testCaseStartedId, testCase)
         console.error(
           `Before/After hook failed with message: ${testStepResult.message}`
         )
