@@ -49,6 +49,7 @@
   "enginesTested": {
     "node": "14 || 16 || 18 || 19"
   },
+  
   "dependencies": {
     "@cucumber/ci-environment": "9.2.0",
     "@cucumber/cucumber-expressions": "16.1.2",
