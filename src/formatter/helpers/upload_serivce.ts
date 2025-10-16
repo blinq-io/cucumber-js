@@ -34,6 +34,10 @@ class RunUploadService {
     private accessToken: string
   ) {}
   async createRunDocument(name: string) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      console.log('Skipping report upload as UPLOADREPORTS is set to false')
+      return { id: 'local-run', projectId: 'local-project' }
+    }
     try {
       const runDocResult = await axiosClient.post(
         this.runsApiBaseURL + '/cucumber-runs/create',
@@ -66,6 +70,9 @@ class RunUploadService {
     }
   }
   async updateProjectAnalytics(projectId: string) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return
+    }
     try {
       await axiosClient.post(
         this.runsApiBaseURL + '/project/updateAIRecoveryCount',
@@ -84,6 +91,9 @@ class RunUploadService {
     }
   }
   async upload(formData: FormData) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return
+    }
     const response = await axiosClient.post(
       this.runsApiBaseURL + '/cucumber-runs/upload',
       formData,
@@ -111,6 +121,9 @@ class RunUploadService {
     }
   }
   async getPreSignedUrls(fileUris: string[], runId: string) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return {}
+    }
     const response = await axiosClient.post(
       this.runsApiBaseURL + '/cucumber-runs/generateuploadurls',
       {
@@ -149,6 +162,9 @@ class RunUploadService {
     reportFolder: string,
     rerunId?: string
   ) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return null
+    }
     const fileUris = []
     //iterate over all the files in the JsonCommand.screenshotId and insert them into the fileUris array
     for (const step of testCaseReport.steps) {
@@ -253,6 +269,9 @@ class RunUploadService {
     }
   }
   async uploadFile(filePath: string, preSignedUrl: string) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return true
+    }
     const fileStream = createReadStream(filePath)
     let success = true
     try {
@@ -276,6 +295,9 @@ class RunUploadService {
     return success
   }
   async uploadComplete(runId: string, projectId: string) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return
+    }
     const response = await axiosClient.post(
       this.runsApiBaseURL + '/cucumber-runs/uploadCompletion',
       {
@@ -326,6 +348,9 @@ class RunUploadService {
     projectId: string,
     testProgressReport: JsonTestProgress
   ) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return
+    }
     try {
       const res = await axiosClient.post(
         this.runsApiBaseURL + '/cucumber-runs/modifyTestCase',
@@ -355,6 +380,9 @@ class RunUploadService {
     }
   }
   async createStatus(status: string) {
+    if (process.env.UPLOADREPORTS === 'false') {
+      return
+    }
     if (!process.env.UUID) {
       return
     }
