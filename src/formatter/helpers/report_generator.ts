@@ -19,14 +19,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-    ? 'http://localhost:5001/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'stage'
-    ? 'https://stage.api.blinq.io/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'prod'
-    ? 'https://api.blinq.io/api/runs'
-    : !process.env.NODE_ENV_BLINQ
-    ? 'https://api.blinq.io/api/runs'
-    : `${process.env.NODE_ENV_BLINQ}/api/runs`
+      ? 'http://localhost:5001/api/runs'
+      : process.env.NODE_ENV_BLINQ === 'stage'
+        ? 'https://stage.api.blinq.io/api/runs'
+        : process.env.NODE_ENV_BLINQ === 'prod'
+          ? 'https://api.blinq.io/api/runs'
+          : !process.env.NODE_ENV_BLINQ
+            ? 'https://api.blinq.io/api/runs'
+            : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -788,7 +788,11 @@ export default class ReportGenerator {
     this.networkLog = []
     this.logs = []
 
-    if (this.testCaseLog && this.testCaseLog.length > 0 && !testProgress.logFileId) {
+    if (
+      this.testCaseLog &&
+      this.testCaseLog.length > 0 &&
+      !testProgress.logFileId
+    ) {
       // Create the logs directory
       const logsDir = path.join(this.reportFolder, 'editorLogs')
       const fileName = `testCaseLog_${testCaseStartedId}.log`
