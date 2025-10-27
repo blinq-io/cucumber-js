@@ -788,7 +788,7 @@ export default class ReportGenerator {
     this.networkLog = []
     this.logs = []
 
-    if (this.testCaseLog && this.testCaseLog.length > 0) {
+    if (this.testCaseLog && this.testCaseLog.length > 0 && !testProgress.logFileId) {
       // Create the logs directory
       const logsDir = path.join(this.reportFolder, 'editorLogs')
       const fileName = `testCaseLog_${testCaseStartedId}.log`
