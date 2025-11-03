@@ -44,7 +44,7 @@ class RunUploadService {
         {
           name: name ? name : 'TEST',
           branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
-          video_id: process.env.VIDEO_ID
+          video_id: process.env.VIDEO_ID,
         },
         {
           headers: {
@@ -236,7 +236,7 @@ class RunUploadService {
                 ? 'executions'
                 : 'local',
           rerunId,
-          video_id: process.env.VIDEO_ID
+          video_id: process.env.VIDEO_ID,
         },
         {
           headers: {
