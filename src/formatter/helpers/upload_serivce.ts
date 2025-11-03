@@ -44,7 +44,7 @@ class RunUploadService {
         {
           name: name ? name : 'TEST',
           branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
-          video_id
+          video_id,
         },
         {
           headers: {
