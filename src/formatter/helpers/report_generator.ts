@@ -19,14 +19,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-      ? 'http://localhost:5001/api/runs'
-      : process.env.NODE_ENV_BLINQ === 'stage'
-        ? 'https://stage.api.blinq.io/api/runs'
-        : process.env.NODE_ENV_BLINQ === 'prod'
-          ? 'https://api.blinq.io/api/runs'
-          : !process.env.NODE_ENV_BLINQ
-            ? 'https://api.blinq.io/api/runs'
-            : `${process.env.NODE_ENV_BLINQ}/api/runs`
+    ? 'http://localhost:5001/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? 'https://stage.api.blinq.io/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'prod'
+    ? 'https://api.blinq.io/api/runs'
+    : !process.env.NODE_ENV_BLINQ
+    ? 'https://api.blinq.io/api/runs'
+    : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -192,6 +192,7 @@ export default class ReportGenerator {
     REPORT_SERVICE_URL,
     REPORT_SERVICE_TOKEN
   )
+  private retryTestCaseId: string | null = null
 
   async handleMessage(
     envelope: EnvelopeWithMetaMessage | messages.Envelope,
@@ -259,6 +260,11 @@ export default class ReportGenerator {
         break
       }
       case 'testCaseStarted': {
+        this.retryTestCaseId = (
+          envelope[type] as messages.TestCaseStarted & {
+            retryTestCaseId?: string
+          }
+        ).retryTestCaseId
         const testCaseStarted = envelope[type]
         this.onTestCaseStarted(testCaseStarted)
         break
@@ -280,9 +286,17 @@ export default class ReportGenerator {
       }
       case 'testCaseFinished': {
         const testCaseFinished = envelope[type]
+        let reRunIdFinal = this.retryTestCaseId
+
+        if (reRunId) {
+          reRunIdFinal = reRunId
+        }
 
         // Call the onTestCaseFinished method
-        const result = await this.onTestCaseFinished(testCaseFinished, reRunId)
+        const result = await this.onTestCaseFinished(
+          testCaseFinished,
+          reRunIdFinal
+        )
         return result
       }
       // case "hook": { break} // After Hook
