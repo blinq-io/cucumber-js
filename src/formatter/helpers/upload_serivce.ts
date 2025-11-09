@@ -29,10 +29,7 @@ export interface FinishTestCaseResponse {
 }
 
 class RunUploadService {
-  constructor(
-    private runsApiBaseURL: string,
-    private accessToken: string
-  ) {}
+  constructor(private runsApiBaseURL: string, private accessToken: string) {}
   async createRunDocument(name: string) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -44,7 +41,7 @@ class RunUploadService {
         {
           name: name ? name : 'TEST',
           branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
-          video_id: process.env.VIDEO_ID
+          video_id: process.env.VIDEO_ID,
         },
         {
           headers: {
@@ -222,6 +219,24 @@ class RunUploadService {
       }
 
       // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
+      const mode =
+        process.env.MODE === 'cloud'
+          ? 'cloud'
+          : process.env.MODE === 'executions'
+          ? 'executions'
+          : 'local'
+
+      let rerunIdFinal = null
+
+      rerunIdFinal = process.env.RETRY_ID || null
+      if (rerunId) {
+        rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`
+      }
+
+      if (mode === 'executions') {
+        testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
+      }
+
       const { data } = await axiosClient.post<FinishTestCaseResponse>(
         this.runsApiBaseURL + '/cucumber-runs/createNewTestCase',
         {
@@ -229,14 +244,9 @@ class RunUploadService {
           projectId,
           testProgressReport: testCaseReport,
           browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-          mode:
-            process.env.MODE === 'cloud'
-              ? 'cloud'
-              : process.env.MODE === 'executions'
-                ? 'executions'
-                : 'local',
-          rerunId,
-          video_id: process.env.VIDEO_ID
+          mode,
+          rerunId: rerunIdFinal,
+          video_id: process.env.VIDEO_ID,
         },
         {
           headers: {
@@ -310,8 +320,8 @@ class RunUploadService {
           process.env.MODE === 'cloud'
             ? 'cloud'
             : process.env.MODE === 'executions'
-              ? 'executions'
-              : 'local',
+            ? 'executions'
+            : 'local',
       },
       {
         headers: {
