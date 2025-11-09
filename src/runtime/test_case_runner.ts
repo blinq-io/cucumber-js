@@ -218,6 +218,10 @@ export default class TestCaseRunner {
       },
     } as messages.Envelope & { retryTestCaseId?: string }
 
+    if (process.env.NODE_ENV === 'test') {
+      delete (testCaseStarted as any).testCaseStarted.retryTestCaseId
+    }
+
     this.eventBroadcaster.emit('envelope', testCaseStarted)
 
     if (this.maxAttempts > 1 && attempt === 0) {
