@@ -216,7 +216,7 @@ export default class TestCaseRunner {
         timestamp: this.stopwatch.timestamp(),
         retryTestCaseId: this.retryTestCaseId,
       },
-    } as messages.Envelope
+    } as messages.Envelope & { retryTestCaseId?: string }
 
     this.eventBroadcaster.emit('envelope', testCaseStarted)
 
