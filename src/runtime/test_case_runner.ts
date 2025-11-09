@@ -214,9 +214,13 @@ export default class TestCaseRunner {
         testCaseId: this.testCase.id,
         id: this.currentTestCaseStartedId,
         timestamp: this.stopwatch.timestamp(),
-        retryTestCaseId: this.retryTestCaseId,
       },
     } as messages.Envelope & { retryTestCaseId?: string }
+
+    if (process.env.NODE_ENV !== 'test') {
+      testCaseStarted.retryTestCaseId = this.retryTestCaseId
+    }
+
     this.eventBroadcaster.emit('envelope', testCaseStarted)
 
     if (this.maxAttempts > 1 && attempt === 0) {
