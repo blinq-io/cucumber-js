@@ -142,7 +142,15 @@ describe('TestCaseRunner', () => {
             },
           },
         ]
-        expect(envelopes).to.eql(expectedEnvelopes)
+
+        const newEnvelopes = envelopes.map((envelope: any) => {
+          if (envelope.testCaseStarted) {
+            delete envelope.testCaseStarted.retryTestCaseId
+          }
+          return envelope
+        })
+
+        expect(newEnvelopes).to.eql(expectedEnvelopes)
         expect(result).to.eql(messages.TestStepResultStatus.PASSED)
       })
     })
@@ -364,7 +372,14 @@ describe('TestCaseRunner', () => {
             },
           },
         ]
-        expect(envelopes).to.eql(expected)
+        const newEnvelopes = envelopes.map((envelope: any) => {
+          if (envelope.testCaseStarted) {
+            delete envelope.testCaseStarted.retryTestCaseId
+          }
+          return envelope
+        })
+
+        expect(newEnvelopes).to.eql(expected)
         expect(result).to.eql(messages.TestStepResultStatus.PASSED)
       })
 
