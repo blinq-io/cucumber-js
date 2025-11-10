@@ -52,7 +52,7 @@ class RunUploadService {
               : process.env.MODE === 'executions'
                 ? 'executions'
                 : 'local',
-          env: { name: env?.name, baseUrl: env?.baseUrl},
+          env: { name: env?.name, baseUrl: env?.baseUrl },
         },
         {
           headers: {
