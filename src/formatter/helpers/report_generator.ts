@@ -878,7 +878,7 @@ export default class ReportGenerator {
         runId = process.env.RUN_ID
         projectId = process.env.PROJECT_ID
       } else {
-        const runDoc = await this.uploadService.createRunDocument(this.runName, testCase.env)
+        const runDoc = await this.uploadService.createRunDocument(this.runName)
         runId = runDoc._id
         projectId = runDoc.project_id
         if (!process.env.IGNORE_ENV_VARIABLES) {

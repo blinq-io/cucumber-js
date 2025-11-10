@@ -33,7 +33,7 @@ class RunUploadService {
     private runsApiBaseURL: string,
     private accessToken: string
   ) {}
-  async createRunDocument(name: string, env: any) {
+  async createRunDocument(name: string) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
       return { id: 'local-run', projectId: 'local-project' }
@@ -45,14 +45,6 @@ class RunUploadService {
           name: name ? name : 'TEST',
           branch: process.env.GIT_BRANCH ? process.env.GIT_BRANCH : 'main',
           video_id: process.env.VIDEO_ID,
-          browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-          mode:
-            process.env.MODE === 'cloud'
-              ? 'cloud'
-              : process.env.MODE === 'executions'
-                ? 'executions'
-                : 'local',
-          env: { name: env?.name, baseUrl: env?.baseUrl},
         },
         {
           headers: {
