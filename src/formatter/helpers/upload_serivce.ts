@@ -222,6 +222,24 @@ class RunUploadService {
       }
 
       // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
+      const mode =
+        process.env.MODE === 'cloud'
+          ? 'cloud'
+          : process.env.MODE === 'executions'
+            ? 'executions'
+            : 'local'
+
+      let rerunIdFinal = null
+
+      rerunIdFinal = process.env.RETRY_ID || null
+      if (rerunId) {
+        rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`
+      }
+
+      if (mode === 'executions') {
+        testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
+      }
+
       const { data } = await axiosClient.post<FinishTestCaseResponse>(
         this.runsApiBaseURL + '/cucumber-runs/createNewTestCase',
         {
@@ -229,13 +247,8 @@ class RunUploadService {
           projectId,
           testProgressReport: testCaseReport,
           browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-          mode:
-            process.env.MODE === 'cloud'
-              ? 'cloud'
-              : process.env.MODE === 'executions'
-                ? 'executions'
-                : 'local',
-          rerunId,
+          mode,
+          rerunId: rerunIdFinal,
           video_id: process.env.VIDEO_ID,
         },
         {

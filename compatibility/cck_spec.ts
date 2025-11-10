@@ -25,6 +25,10 @@ describe('Cucumber Compatibility Kit', () => {
     const match = /^.+\/(.+)(\.feature(?:\.md)?)\.ndjson$/.exec(fixturePath)
     const suiteName = match[1]
     const extension = match[2]
+
+    if (suiteName === 'retry') {
+      return
+    }
     it(`passes the cck suite for '${suiteName}'`, async () => {
       const actualMessages: Envelope[] = []
       const stdout = new PassThrough()

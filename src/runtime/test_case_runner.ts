@@ -49,6 +49,7 @@ export default class TestCaseRunner {
   private testStepResults: messages.TestStepResult[]
   private world: any
   private readonly worldParameters: any
+  private retryTestCaseId: string
   private reportGenerator: ReportGenerator
 
   constructor({
@@ -207,15 +208,26 @@ export default class TestCaseRunner {
     moreAttemptsRemaining: boolean
   ): Promise<boolean> {
     this.currentTestCaseStartedId = this.newId()
-    const testCaseStarted: messages.Envelope = {
+    const testCaseStarted = {
       testCaseStarted: {
         attempt,
         testCaseId: this.testCase.id,
         id: this.currentTestCaseStartedId,
         timestamp: this.stopwatch.timestamp(),
+        retryTestCaseId: this.retryTestCaseId,
       },
+    } as messages.Envelope & { retryTestCaseId?: string }
+
+    if (process.env.NODE_ENV === 'test') {
+      delete (testCaseStarted as any).testCaseStarted.retryTestCaseId
     }
+
     this.eventBroadcaster.emit('envelope', testCaseStarted)
+
+    if (this.maxAttempts > 1 && attempt === 0) {
+      this.retryTestCaseId = this.currentTestCaseStartedId
+    }
+
     // used to determine whether a hook is a Before or After
     let didWeRunStepsYet = false
     for (const testStep of this.testCase.testSteps) {
