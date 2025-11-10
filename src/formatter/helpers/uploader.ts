@@ -42,7 +42,7 @@ export default class ReportUploader {
   }
 
   async uploadRun(report: JsonReport, runName: string) {
-    const runDoc = await this.uploadService.createRunDocument(runName)
+    const runDoc = await this.uploadService.createRunDocument(runName, report.env)
     const runDocId = runDoc._id
     const reportFolder = this.reportGenerator.reportFolder
     if (!fs.existsSync(reportFolder)) {
