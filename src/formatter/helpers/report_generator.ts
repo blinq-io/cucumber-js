@@ -64,6 +64,7 @@ export type JsonResultFailed = {
   startTime: JsonTimestamp
   endTime: JsonTimestamp
   message?: string
+  name?: string
   // exception?: JsonException
 }
 export type JsonFixedByAi = {
@@ -548,17 +549,20 @@ export default class ReportGenerator {
     startTime,
     endTime,
     result,
+    stepName,
   }: {
     commands: JsonCommand[]
     startTime: number
     endTime: number
     result: messages.TestStepResult
+    stepName: string
   }): JsonStepResult {
     for (const command of commands) {
       if (command.result.status === 'FAILED') {
         return {
           status: 'FAILED',
           message: command.result.message,
+          name: stepName,
           startTime,
           endTime,
         } as const
@@ -569,6 +573,7 @@ export default class ReportGenerator {
       startTime,
       endTime,
       message: result.message,
+      name: stepName,
     }
   }
   private onTestStepFinished(testStepFinished: messages.TestStepFinished) {
@@ -658,6 +663,7 @@ export default class ReportGenerator {
         startTime: prevStepResult.startTime,
         endTime: this.getTimeStamp(timestamp),
         result: testStepResult,
+        stepName: stepProgess.text,
       })
     } else {
       stepProgess.result = {
