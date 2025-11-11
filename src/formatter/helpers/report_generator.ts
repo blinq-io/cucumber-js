@@ -19,14 +19,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-      ? 'http://localhost:5001/api/runs'
-      : process.env.NODE_ENV_BLINQ === 'stage'
-        ? 'https://stage.api.blinq.io/api/runs'
-        : process.env.NODE_ENV_BLINQ === 'prod'
-          ? 'https://api.blinq.io/api/runs'
-          : !process.env.NODE_ENV_BLINQ
-            ? 'https://api.blinq.io/api/runs'
-            : `${process.env.NODE_ENV_BLINQ}/api/runs`
+    ? 'http://localhost:5001/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? 'https://stage.api.blinq.io/api/runs'
+    : process.env.NODE_ENV_BLINQ === 'prod'
+    ? 'https://api.blinq.io/api/runs'
+    : !process.env.NODE_ENV_BLINQ
+    ? 'https://api.blinq.io/api/runs'
+    : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -679,12 +679,10 @@ export default class ReportGenerator {
       const parameters = this.testCaseReportMap.get(id).parameters
       const _parameters: typeof parameters = {}
       Object.keys(parameters).map((key) => {
-        if (
-          parameters[key].startsWith('{{') &&
-          parameters[key].endsWith('}}')
-        ) {
-          const path = parameters[key].slice(2, -2).split('.')
-          let value = String(objectPath.get(data, path) ?? parameters[key])
+        const valueParam = parameters[key].toString()
+        if (valueParam.startsWith('{{') && valueParam.endsWith('}}')) {
+          const path = valueParam.slice(2, -2).split('.')
+          let value = String(objectPath.get(data, path) ?? valueParam)
           if (value) {
             if (value.startsWith('secret:')) {
               value = 'secret:****'
