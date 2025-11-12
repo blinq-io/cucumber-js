@@ -192,6 +192,7 @@ export default class ReportGenerator {
     REPORT_SERVICE_URL,
     REPORT_SERVICE_TOKEN
   )
+  private retryTestCaseId: string | null = null
 
   async handleMessage(
     envelope: EnvelopeWithMetaMessage | messages.Envelope,
@@ -259,6 +260,11 @@ export default class ReportGenerator {
         break
       }
       case 'testCaseStarted': {
+        this.retryTestCaseId = (
+          envelope[type] as messages.TestCaseStarted & {
+            retryTestCaseId?: string
+          }
+        ).retryTestCaseId
         const testCaseStarted = envelope[type]
         this.onTestCaseStarted(testCaseStarted)
         break
@@ -280,9 +286,17 @@ export default class ReportGenerator {
       }
       case 'testCaseFinished': {
         const testCaseFinished = envelope[type]
+        let reRunIdFinal = this.retryTestCaseId
+
+        if (reRunId) {
+          reRunIdFinal = reRunId
+        }
 
         // Call the onTestCaseFinished method
-        const result = await this.onTestCaseFinished(testCaseFinished, reRunId)
+        const result = await this.onTestCaseFinished(
+          testCaseFinished,
+          reRunIdFinal
+        )
         return result
       }
       // case "hook": { break} // After Hook
@@ -665,12 +679,10 @@ export default class ReportGenerator {
       const parameters = this.testCaseReportMap.get(id).parameters
       const _parameters: typeof parameters = {}
       Object.keys(parameters).map((key) => {
-        if (
-          parameters[key].startsWith('{{') &&
-          parameters[key].endsWith('}}')
-        ) {
-          const path = parameters[key].slice(2, -2).split('.')
-          let value = String(objectPath.get(data, path) ?? parameters[key])
+        const valueParam = parameters[key].toString()
+        if (valueParam.startsWith('{{') && valueParam.endsWith('}}')) {
+          const path = valueParam.slice(2, -2).split('.')
+          let value = String(objectPath.get(data, path) ?? valueParam)
           if (value) {
             if (value.startsWith('secret:')) {
               value = 'secret:****'
@@ -863,7 +875,10 @@ export default class ReportGenerator {
         runId = process.env.RUN_ID
         projectId = process.env.PROJECT_ID
       } else {
-        const runDoc = await this.uploadService.createRunDocument(this.runName)
+        const runDoc = await this.uploadService.createRunDocument(
+          this.runName,
+          testCase.env
+        )
         runId = runDoc._id
         projectId = runDoc.project_id
         if (!process.env.IGNORE_ENV_VARIABLES) {
