@@ -88,12 +88,20 @@ const generateTestData = (
   while ((match = regexp.exec(featureFileContent)) !== null) {
     if (namespaces.includes(match[1].split('.')[0])) continue
     try {
-      const fake =
-        duplicateFakeData &&
-        duplicateFakeData.length > 0 &&
-        duplicateFakeData[0].var === match[0]
-          ? duplicateFakeData.shift().fake
-          : getFakeString(match[0].substring(2, match[0].length - 2))
+      let fake: any
+
+      if (!duplicateFakeData || duplicateFakeData.length === 0) {
+        fake = getFakeString(match[0].substring(2, match[0].length - 2))
+      } else {
+        const foundDuplicate = duplicateFakeData.find(
+          (item) => item.var === match[0]
+        )
+        if (foundDuplicate) {
+          fake = foundDuplicate.fake
+        } else {
+          fake = getFakeString(match[0].substring(2, match[0].length - 2))
+        }
+      }
       otherFakeData.push({
         var: match[0],
         fake,
