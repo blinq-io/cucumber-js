@@ -175,11 +175,9 @@ const getDefinitionFunction = (
 
   const [mjsData] = mjsFiles.map((file) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { [functionName]: func } = require(path.join(
-      feature_path,
-      '../step_definitions',
-      file
-    ))
+    const { [functionName]: func } = require(
+      path.join(feature_path, '../step_definitions', file)
+    )
     if (!func)
       throw new Error(`Function ${functionName} not found in file ${file}`)
 
