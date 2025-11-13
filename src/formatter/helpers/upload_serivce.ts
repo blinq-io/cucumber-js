@@ -29,7 +29,10 @@ export interface FinishTestCaseResponse {
 }
 
 class RunUploadService {
-  constructor(private runsApiBaseURL: string, private accessToken: string) {}
+  constructor(
+    private runsApiBaseURL: string,
+    private accessToken: string
+  ) {}
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -47,8 +50,8 @@ class RunUploadService {
             process.env.MODE === 'cloud'
               ? 'cloud'
               : process.env.MODE === 'executions'
-              ? 'executions'
-              : 'local',
+                ? 'executions'
+                : 'local',
           env: { name: env?.name, baseUrl: env?.baseUrl },
         },
         {
@@ -240,8 +243,8 @@ class RunUploadService {
         process.env.MODE === 'cloud'
           ? 'cloud'
           : process.env.MODE === 'executions'
-          ? 'executions'
-          : 'local'
+            ? 'executions'
+            : 'local'
 
       let rerunIdFinal = null
 
@@ -340,8 +343,8 @@ class RunUploadService {
           process.env.MODE === 'cloud'
             ? 'cloud'
             : process.env.MODE === 'executions'
-            ? 'executions'
-            : 'local',
+              ? 'executions'
+              : 'local',
       },
       {
         headers: {
