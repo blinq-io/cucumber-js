@@ -29,10 +29,7 @@ export interface FinishTestCaseResponse {
 }
 
 class RunUploadService {
-  constructor(
-    private runsApiBaseURL: string,
-    private accessToken: string
-  ) { }
+  constructor(private runsApiBaseURL: string, private accessToken: string) {}
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -50,8 +47,8 @@ class RunUploadService {
             process.env.MODE === 'cloud'
               ? 'cloud'
               : process.env.MODE === 'executions'
-                ? 'executions'
-                : 'local',
+              ? 'executions'
+              : 'local',
           env: { name: env?.name, baseUrl: env?.baseUrl },
         },
         {
@@ -197,9 +194,10 @@ class RunUploadService {
       fileUris.push(`trace/${testCaseReport.traceFileId}`)
     }
     // console.log({ fileUris })
-    const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
     //upload all the files in the fileUris array
+
     try {
+      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
       for (let i = 0; i < fileUris.length; i += BATCH_SIZE) {
         const batch = fileUris.slice(
           i,
@@ -231,14 +229,19 @@ class RunUploadService {
             })
         )
       }
+    } catch (error) {
+      const errorMessage = error.response ? error.response.data : error.message
+      console.error('Error uploading files:', errorMessage)
+    }
 
+    try {
       // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
       const mode =
         process.env.MODE === 'cloud'
           ? 'cloud'
           : process.env.MODE === 'executions'
-            ? 'executions'
-            : 'local'
+          ? 'executions'
+          : 'local'
 
       let rerunIdFinal = null
 
@@ -290,7 +293,10 @@ class RunUploadService {
       logReportLink(runId, projectId, testCaseReport.result)
       return data
     } catch (e) {
-      console.error(`failed to upload the test case: ${testCaseReport.id} ${e}`)
+      const errorMessage = e.response ? e.response.data : e.message
+      console.error(
+        `failed to upload the test case: ${testCaseReport.id} ${errorMessage}`
+      )
       return null
     }
   }
@@ -334,8 +340,8 @@ class RunUploadService {
           process.env.MODE === 'cloud'
             ? 'cloud'
             : process.env.MODE === 'executions'
-              ? 'executions'
-              : 'local',
+            ? 'executions'
+            : 'local',
       },
       {
         headers: {
