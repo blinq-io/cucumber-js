@@ -804,9 +804,7 @@ export default class ReportGenerator {
     testProgress.networkLog = this.networkLog
     testProgress.initialAriaSnapshot = this.initialAriaSnapshot
     if (process.env.TRACE) {
-      testProgress.traceFileId = path.join(
-        `trace-${testCaseStartedId}.zip`
-      )
+      testProgress.traceFileId = path.join(`trace-${testCaseStartedId}.zip`)
     }
     this.initialAriaSnapshot = ''
     this.networkLog = []
