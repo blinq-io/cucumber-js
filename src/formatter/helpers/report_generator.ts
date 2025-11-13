@@ -19,14 +19,14 @@ const URL =
   process.env.NODE_ENV_BLINQ === 'dev'
     ? 'https://dev.api.blinq.io/api/runs'
     : process.env.NODE_ENV_BLINQ === 'local'
-    ? 'http://localhost:5001/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'stage'
-    ? 'https://stage.api.blinq.io/api/runs'
-    : process.env.NODE_ENV_BLINQ === 'prod'
-    ? 'https://api.blinq.io/api/runs'
-    : !process.env.NODE_ENV_BLINQ
-    ? 'https://api.blinq.io/api/runs'
-    : `${process.env.NODE_ENV_BLINQ}/api/runs`
+      ? 'http://localhost:5001/api/runs'
+      : process.env.NODE_ENV_BLINQ === 'stage'
+        ? 'https://stage.api.blinq.io/api/runs'
+        : process.env.NODE_ENV_BLINQ === 'prod'
+          ? 'https://api.blinq.io/api/runs'
+          : !process.env.NODE_ENV_BLINQ
+            ? 'https://api.blinq.io/api/runs'
+            : `${process.env.NODE_ENV_BLINQ}/api/runs`
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
 const BATCH_SIZE = 10
@@ -143,6 +143,7 @@ export type JsonTestProgress = {
     name: string
     baseUrl: string
   }
+  traceFileId?: string
 }
 
 export type JsonReport = {
@@ -802,6 +803,12 @@ export default class ReportGenerator {
     testProgress.webLog = this.logs
     testProgress.networkLog = this.networkLog
     testProgress.initialAriaSnapshot = this.initialAriaSnapshot
+    if (process.env.TRACE) {
+      testProgress.traceFileId = path.join(
+        this.reportFolder,
+        `trace/trace-${testCaseStartedId}.zip`
+      )
+    }
     this.initialAriaSnapshot = ''
     this.networkLog = []
     this.logs = []
