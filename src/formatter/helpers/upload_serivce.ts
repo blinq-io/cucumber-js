@@ -32,7 +32,7 @@ class RunUploadService {
   constructor(
     private runsApiBaseURL: string,
     private accessToken: string
-  ) {}
+  ) { }
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -192,6 +192,9 @@ class RunUploadService {
       fileUris.push(
         'editorLogs' + '/' + 'testCaseLog_' + testCaseReport.logFileId + '.log'
       )
+    }
+    if (testCaseReport.traceFileId) {
+      fileUris.push(`trace/${testCaseReport.traceFileId}`)
     }
     // console.log({ fileUris })
     const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
