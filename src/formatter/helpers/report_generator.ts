@@ -805,8 +805,7 @@ export default class ReportGenerator {
     testProgress.initialAriaSnapshot = this.initialAriaSnapshot
     if (process.env.TRACE) {
       testProgress.traceFileId = path.join(
-        this.reportFolder,
-        `trace/trace-${testCaseStartedId}.zip`
+        `trace-${testCaseStartedId}.zip`
       )
     }
     this.initialAriaSnapshot = ''
