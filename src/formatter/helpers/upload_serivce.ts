@@ -29,7 +29,7 @@ export interface FinishTestCaseResponse {
 }
 
 class RunUploadService {
-  constructor(private runsApiBaseURL: string, private accessToken: string) {}
+  constructor(private runsApiBaseURL: string, private accessToken: string) { }
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -47,8 +47,8 @@ class RunUploadService {
             process.env.MODE === 'cloud'
               ? 'cloud'
               : process.env.MODE === 'executions'
-              ? 'executions'
-              : 'local',
+                ? 'executions'
+                : 'local',
           env: { name: env?.name, baseUrl: env?.baseUrl },
         },
         {
@@ -171,78 +171,75 @@ class RunUploadService {
     if (process.env.UPLOADREPORTS === 'false') {
       return null
     }
-    const fileUris = []
-    //iterate over all the files in the JsonCommand.screenshotId and insert them into the fileUris array
+
+    const fileUris: string[] = []
+
+    // Collect screenshot + trace + logs
     for (const step of testCaseReport.steps) {
       for (const command of step.commands) {
         if (command.screenshotId) {
-          fileUris.push(
-            'screenshots' + '/' + String(command.screenshotId) + '.png'
-          )
+          fileUris.push(`screenshots/${String(command.screenshotId)}.png`)
         }
       }
       if (step.traceFilePath) {
-        fileUris.push('trace' + '/' + step.traceFilePath)
+        fileUris.push(`trace/${step.traceFilePath}`)
       }
     }
-    if (testCaseReport.logFileId) {
-      fileUris.push(
-        'editorLogs' + '/' + 'testCaseLog_' + testCaseReport.logFileId + '.log'
-      )
-    }
-    // console.log({ fileUris })
-    //upload all the files in the fileUris array
 
+    if (testCaseReport.logFileId) {
+      fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`)
+    }
+
+    //
+    // 🔹 UPLOAD FILES (presigned URLs)
+    //
     try {
       const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
+
       for (let i = 0; i < fileUris.length; i += BATCH_SIZE) {
-        const batch = fileUris.slice(
-          i,
-          Math.min(i + BATCH_SIZE, fileUris.length)
-        )
+        const batch = fileUris.slice(i, Math.min(i + BATCH_SIZE, fileUris.length))
+
         await Promise.all(
           batch
             .filter((fileUri) => preSignedUrls[fileUri])
             .map(async (fileUri) => {
               for (let j = 0; j < MAX_RETRIES; j++) {
-                if (existsSync(path.join(reportFolder, fileUri))) {
-                  const success = await this.uploadFile(
-                    path.join(reportFolder, fileUri),
-                    preSignedUrls[fileUri]
-                  )
-                  if (success) {
-                    return
+                try {
+                  const filePath = path.join(reportFolder, fileUri)
+
+                  if (existsSync(filePath)) {
+                    const ok = await this.uploadFile(filePath, preSignedUrls[fileUri])
+                    if (ok) return
                   }
-                }
-                const success = await this.uploadFile(
-                  path.join(reportFolder, fileUri),
-                  preSignedUrls[fileUri]
-                )
-                if (success) {
-                  return
+
+                  const ok = await this.uploadFile(filePath, preSignedUrls[fileUri])
+                  if (ok) return
+                } catch (err) {
+                  // Retry silently
                 }
               }
-              console.error('Failed to upload file:', fileUri)
+
+              console.error(`Failed to upload file after retries: ${fileUri}`)
             })
         )
       }
-    } catch (error) {
-      const errorMessage = error.response ? error.response.data : error.message
-      console.error('Error uploading files:', errorMessage)
+    } catch (error: any) {
+      const sanitized = this.sanitizeError(error)
+      console.error('Error uploading files:', sanitized)
     }
 
+    //
+    // 🔹 UPLOAD FINAL TEST REPORT (JSON metadata)
+    //
     try {
-      // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
       const mode =
         process.env.MODE === 'cloud'
           ? 'cloud'
           : process.env.MODE === 'executions'
-          ? 'executions'
-          : 'local'
+            ? 'executions'
+            : 'local'
 
-      let rerunIdFinal = null
-
-      rerunIdFinal = process.env.RETRY_ID || null
+      let rerunIdFinal = process.env.RETRY_ID || null
       if (rerunId) {
         rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`
       }
@@ -252,12 +249,12 @@ class RunUploadService {
       }
 
       const { data } = await axiosClient.post<FinishTestCaseResponse>(
-        this.runsApiBaseURL + '/cucumber-runs/createNewTestCase',
+        `${this.runsApiBaseURL}/cucumber-runs/createNewTestCase`,
         {
           runId,
           projectId,
           testProgressReport: testCaseReport,
-          browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
+          browser: process.env.BROWSER || 'chromium',
           mode,
           rerunId: rerunIdFinal,
           video_id: process.env.VIDEO_ID,
@@ -270,12 +267,11 @@ class RunUploadService {
         }
       )
 
+      // optional event — keep original logic
       try {
         await axiosClient.post(
           `${SERVICES_URI.STORAGE}/event`,
-          {
-            event: ActionEvents.upload_report,
-          },
+          { event: ActionEvents.upload_report },
           {
             headers: {
               Authorization: 'Bearer ' + this.accessToken,
@@ -284,19 +280,40 @@ class RunUploadService {
             },
           }
         )
-      } catch (error) {
-        // no event tracking
-      }
+      } catch { }
+
       logReportLink(runId, projectId, testCaseReport.result)
       return data
-    } catch (e) {
-      const errorMessage = e.response ? e.response.data : e.message
-      console.error(
-        `failed to upload the test case: ${testCaseReport.id} ${errorMessage}`
-      )
+    } catch (e: any) {
+      const sanitized = this.sanitizeError(e)
+      console.error(`failed to upload the test case: ${testCaseReport.id} ${sanitized}`)
       return null
     }
   }
+
+  /**
+   * 🔧 Sanitizes Axios errors to avoid dumping Cloudflare HTML (524, 502, etc.)
+   */
+  private sanitizeError(error: any) {
+    // Axios-style error with response
+    if (error?.response) {
+      const data = error.response.data
+
+      // If Cloudflare or HTML error page → return a short meaningful message
+      if (typeof data === 'string' && data.includes('<!DOCTYPE html')) {
+        return `[HTML_ERROR_PAGE] status=${error.response.status} - likely Cloudflare timeout or proxy error`
+      }
+
+      // if JSON or string, return it trimmed
+      return data
+    }
+
+    // system / network errors
+    if (error?.message) return error.message
+
+    return String(error)
+  }
+
   async uploadFile(filePath: string, preSignedUrl: string) {
     if (process.env.UPLOADREPORTS === 'false') {
       return true
@@ -337,8 +354,8 @@ class RunUploadService {
           process.env.MODE === 'cloud'
             ? 'cloud'
             : process.env.MODE === 'executions'
-            ? 'executions'
-            : 'local',
+              ? 'executions'
+              : 'local',
       },
       {
         headers: {
