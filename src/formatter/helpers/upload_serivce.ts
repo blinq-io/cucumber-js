@@ -292,26 +292,44 @@ class RunUploadService {
   }
 
   /**
+   * Improving error logging
    * 🔧 Sanitizes Axios errors to avoid dumping Cloudflare HTML (524, 502, etc.)
    */
   private sanitizeError(error: any) {
-    // Axios-style error with response
+    // Handle Axios-style errors with response
     if (error?.response) {
-      const data = error.response.data
+      const { data, status } = error.response;
 
       // If Cloudflare or HTML error page → return a short meaningful message
       if (typeof data === 'string' && data.includes('<!DOCTYPE html')) {
-        return `[HTML_ERROR_PAGE] status=${error.response.status} - likely Cloudflare timeout or proxy error`
+        return `[HTML_ERROR_PAGE] status=${status} - likely Cloudflare timeout or proxy error`;
       }
 
-      // if JSON or string, return it trimmed
-      return data
+      // If data is a JSON object, stringify it with indentation for readability
+      if (typeof data === 'object') {
+        return JSON.stringify(data, null, 2); // Pretty-print the JSON response
+      }
+
+      // If response is a string (could be an error message), return it trimmed
+      return data?.trim() || `Unknown response data (status: ${status})`;
     }
 
-    // system / network errors
-    if (error?.message) return error.message
+    // System / network errors (e.g., if Axios cannot reach the server)
+    if (error?.message) {
+      return error.message;
+    }
 
-    return String(error)
+    // If the error has a stack (for debugging purposes)
+    if (error?.stack) {
+      return `${error.message}\n${error.stack}`;
+    }
+
+    // If it's a generic error object, attempt to stringify it in a readable format
+    return JSON.stringify(error, (key, value) => {
+      // Avoid circular references or sensitive data
+      if (key === 'password' || key === 'accessToken') return '[REDACTED]';
+      return value;
+    }, 2); // Pretty-print the error object with indentation
   }
 
   async uploadFile(filePath: string, preSignedUrl: string) {
