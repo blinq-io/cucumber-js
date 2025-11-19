@@ -255,85 +255,38 @@ class RunUploadService {
   private sanitizeError(error: any) {
     // Handle Axios-style errors with response
     if (error?.response) {
-      const { data, status } = error.response
+      const { data, status } = error.response;
 
       // If Cloudflare or HTML error page → return a short meaningful message
       if (typeof data === 'string' && data.includes('<!DOCTYPE html')) {
-        return `[HTML_ERROR_PAGE] status=${status} - likely Cloudflare timeout or proxy error`
+        return `[HTML_ERROR_PAGE] status=${status} - likely Cloudflare timeout or proxy error`;
       }
 
       // If data is a JSON object, stringify it with indentation for readability
       if (typeof data === 'object') {
-        return JSON.stringify(data, null, 2) // Pretty-print the JSON response
+        return JSON.stringify(data, null, 2); // Pretty-print the JSON response
       }
 
       // If response is a string (could be an error message), return it trimmed
-      return data?.trim() || `Unknown response data (status: ${status})`
+      return data?.trim() || `Unknown response data (status: ${status})`;
     }
 
     // System / network errors (e.g., if Axios cannot reach the server)
     if (error?.message) {
-      return error.message
+      return error.message;
     }
 
     // If the error has a stack (for debugging purposes)
     if (error?.stack) {
-      return `${error.message}\n${error.stack}`
+      return `${error.message}\n${error.stack}`;
     }
 
     // If it's a generic error object, attempt to stringify it in a readable format
-    return JSON.stringify(
-      error,
-      (key, value) => {
-        // Avoid circular references or sensitive data
-        if (key === 'password' || key === 'accessToken') return '[REDACTED]'
-        return value
-      },
-      2
-    ) // Pretty-print the error object with indentation
-  }
-  async uploadFileWithRetries(filePath: string, presignedUrl: string) {
-    const MAX_RETRIES = 3
-    const RETRY_DELAY_MS = 1000
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const ok = await this.uploadFile(filePath, presignedUrl)
-        if (ok) return true
-      } catch (err: any) {
-        console.error(`Upload attempt #${attempt} failed for ${filePath}:`, {
-          message: err?.message,
-          stack: err?.stack,
-        })
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt))
-        }
-      }
-    }
-    console.error(
-      `Failed to upload file after ${MAX_RETRIES} retries: ${filePath}`
-    )
-    return false
-  }
-
-  async uploadFilesInBatches(
-    fileUris: string[],
-    reportFolder: string,
-    preSignedUrls: Record<string, string>
-  ) {
-    const MAX_CONCURRENCY = 5
-    const limit = pLimit(MAX_CONCURRENCY)
-    const tasks = fileUris
-      .filter((uri) => preSignedUrls[uri])
-      .map((uri) =>
-        limit(async () => {
-          const filePath = path.join(reportFolder, uri)
-          if (existsSync(filePath)) {
-            await this.uploadFileWithRetries(filePath, preSignedUrls[uri])
-          }
-        })
-      )
-
-    await Promise.all(tasks)
+    return JSON.stringify(error, (key, value) => {
+      // Avoid circular references or sensitive data
+      if (key === 'password' || key === 'accessToken') return '[REDACTED]';
+      return value;
+    }, 2); // Pretty-print the error object with indentation
   }
 
   async uploadFile(filePath: string, preSignedUrl: string) {
