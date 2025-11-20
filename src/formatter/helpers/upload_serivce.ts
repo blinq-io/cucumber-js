@@ -193,6 +193,10 @@ class RunUploadService {
       fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`)
     }
 
+    if (testCaseReport.traceFileId) {
+      fileUris.push(`trace/${testCaseReport.traceFileId}`)
+    }
+
     //
     // 🔹 UPLOAD FILES (presigned URLs)
     //
