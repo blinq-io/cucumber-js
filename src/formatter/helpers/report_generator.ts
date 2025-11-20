@@ -142,6 +142,7 @@ export type JsonTestProgress = {
     name: string
     baseUrl: string
   }
+  traceFileId?: string
 }
 
 export type JsonReport = {
@@ -795,6 +796,9 @@ export default class ReportGenerator {
     testProgress.webLog = this.logs
     testProgress.networkLog = this.networkLog
     testProgress.initialAriaSnapshot = this.initialAriaSnapshot
+    if (process.env.TRACE) {
+      testProgress.traceFileId = path.join(`trace-${testCaseStartedId}.zip`)
+    }
     this.initialAriaSnapshot = ''
     this.networkLog = []
     this.logs = []

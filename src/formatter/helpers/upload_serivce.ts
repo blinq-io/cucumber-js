@@ -29,7 +29,10 @@ export interface FinishTestCaseResponse {
 }
 
 class RunUploadService {
-  constructor(private runsApiBaseURL: string, private accessToken: string) { }
+  constructor(
+    private runsApiBaseURL: string,
+    private accessToken: string
+  ) {}
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -188,6 +191,10 @@ class RunUploadService {
 
     if (testCaseReport.logFileId) {
       fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`)
+    }
+
+    if (testCaseReport.traceFileId) {
+      fileUris.push(`trace/${testCaseReport.traceFileId}`)
     }
 
     //
