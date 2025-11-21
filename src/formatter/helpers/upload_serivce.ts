@@ -32,7 +32,7 @@ class RunUploadService {
   constructor(
     private runsApiBaseURL: string,
     private accessToken: string
-  ) {}
+  ) { }
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -236,6 +236,7 @@ class RunUploadService {
       const errorMessage = error.response ? error.response.data : error.message
       console.error('Error uploading files:', errorMessage)
     }
+    console.log("🟨 Screenshots:", fileUris.length);
 
     try {
       // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
@@ -256,25 +257,30 @@ class RunUploadService {
       if (mode === 'executions') {
         testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
       }
+      const payload = {
+        runId,
+        projectId,
+        testProgressReport: testCaseReport,
+        browser: process.env.BROWSER || 'chromium',
+        mode,
+        rerunId: rerunIdFinal,
+        video_id: process.env.VIDEO_ID,
+      };
 
+      const json = JSON.stringify(payload);
+      console.log("🟥 Payload size KB:", Buffer.byteLength(json) / 1024);
+      const start = Date.now();
       const { data } = await axiosClient.post<FinishTestCaseResponse>(
-        this.runsApiBaseURL + '/cucumber-runs/createNewTestCase',
-        {
-          runId,
-          projectId,
-          testProgressReport: testCaseReport,
-          browser: process.env.BROWSER ? process.env.BROWSER : 'chromium',
-          mode,
-          rerunId: rerunIdFinal,
-          video_id: process.env.VIDEO_ID,
-        },
+        `${this.runsApiBaseURL}/cucumber-runs/createNewTestCase`,
+        payload,
         {
           headers: {
             Authorization: 'Bearer ' + this.accessToken,
             'x-source': 'cucumber_js',
           },
         }
-      )
+      );
+      console.log("🟩 POST /createNewTestCase finished in ms:", Date.now() - start);
 
       try {
         await axiosClient.post(
@@ -295,11 +301,11 @@ class RunUploadService {
       }
       logReportLink(runId, projectId, testCaseReport.result)
       return data
-    } catch (e) {
-      const errorMessage = e.response ? e.response.data : e.message
-      console.error(
-        `failed to upload the test case: ${testCaseReport.id} ${errorMessage}`
-      )
+    } catch (e: any) {
+      const sanitized = this.sanitizeError(e);
+      console.error("🟥 Raw response snippet:", e?.response?.data?.toString()?.slice(0, 300));
+
+      console.error(`failed to upload the test case: ${testCaseReport.id} ${sanitized}`)
       return null
     }
   }
