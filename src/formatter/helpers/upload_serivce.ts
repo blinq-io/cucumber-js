@@ -32,7 +32,7 @@ class RunUploadService {
   constructor(
     private runsApiBaseURL: string,
     private accessToken: string
-  ) {}
+  ) { }
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -232,6 +232,7 @@ class RunUploadService {
       const sanitized = this.sanitizeError(error)
       console.error('Error uploading files:', sanitized)
     }
+    console.log("🟨 Screenshots:", fileUris.length);
 
     //
     // 🔹 UPLOAD FINAL TEST REPORT (JSON metadata)
@@ -252,25 +253,30 @@ class RunUploadService {
       if (mode === 'executions') {
         testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
       }
+      const payload = {
+        runId,
+        projectId,
+        testProgressReport: testCaseReport,
+        browser: process.env.BROWSER || 'chromium',
+        mode,
+        rerunId: rerunIdFinal,
+        video_id: process.env.VIDEO_ID,
+      };
 
+      const json = JSON.stringify(payload);
+      console.log("🟥 Payload size KB:", Buffer.byteLength(json) / 1024);
+      const start = Date.now();
       const { data } = await axiosClient.post<FinishTestCaseResponse>(
         `${this.runsApiBaseURL}/cucumber-runs/createNewTestCase`,
-        {
-          runId,
-          projectId,
-          testProgressReport: testCaseReport,
-          browser: process.env.BROWSER || 'chromium',
-          mode,
-          rerunId: rerunIdFinal,
-          video_id: process.env.VIDEO_ID,
-        },
+        payload,
         {
           headers: {
             Authorization: 'Bearer ' + this.accessToken,
             'x-source': 'cucumber_js',
           },
         }
-      )
+      );
+      console.log("🟩 POST /createNewTestCase finished in ms:", Date.now() - start);
 
       // optional event — keep original logic
       try {
@@ -290,7 +296,9 @@ class RunUploadService {
       logReportLink(runId, projectId, testCaseReport.result)
       return data
     } catch (e: any) {
-      const sanitized = this.sanitizeError(e)
+      const sanitized = this.sanitizeError(e);
+      console.error("🟥 Raw response snippet:", e?.response?.data?.toString()?.slice(0, 300));
+
       console.error(`failed to upload the test case: ${testCaseReport.id} ${sanitized}`)
       return null
     }
