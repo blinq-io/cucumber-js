@@ -219,8 +219,6 @@ class RunUploadService {
                     if (ok) return
                   }
 
-                  const ok = await this.uploadFile(filePath, preSignedUrls[fileUri])
-                  if (ok) return
                 } catch (err) {
                   // Retry silently
                 }
@@ -356,8 +354,9 @@ class RunUploadService {
         },
       })
     } catch (error) {
-      if (process.env.NODE_ENV_BLINQ === 'dev') {
-        console.error('Error uploading file:', error)
+      if (process.env.MODE === 'executions') {
+        const sanitized = this.sanitizeError(error)
+        console.error('❌ Error uploading file at:', filePath, 'due to', sanitized);
       }
       success = false
     } finally {
