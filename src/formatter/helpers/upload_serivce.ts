@@ -37,7 +37,7 @@ class RunUploadService {
   constructor(
     private runsApiBaseURL: string,
     private accessToken: string
-  ) {}
+  ) { }
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -196,16 +196,45 @@ class RunUploadService {
     // 🔹 UPLOAD FILES
     try {
       const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
-      await this.uploadFilesInBatches(fileUris, reportFolder, preSignedUrls)
-    } catch (error: any) {
-      console.error('🟥 Error uploading files:', {
-        message: error?.message,
-        stack: error?.stack,
-      })
+      for (let i = 0; i < fileUris.length; i += BATCH_SIZE) {
+        const batch = fileUris.slice(
+          i,
+          Math.min(i + BATCH_SIZE, fileUris.length)
+        )
+        await Promise.all(
+          batch
+            .filter((fileUri) => preSignedUrls[fileUri])
+            .map(async (fileUri) => {
+              for (let j = 0; j < MAX_RETRIES; j++) {
+                if (existsSync(path.join(reportFolder, fileUri))) {
+                  const success = await this.uploadFile(
+                    path.join(reportFolder, fileUri),
+                    preSignedUrls[fileUri]
+                  )
+                  if (success) {
+                    return
+                  }
+                }
+                const success = await this.uploadFile(
+                  path.join(reportFolder, fileUri),
+                  preSignedUrls[fileUri]
+                )
+                if (success) {
+                  return
+                }
+              }
+              console.error('Failed to upload file:', fileUri)
+            })
+        )
+      }
+    } catch (error) {
+      const errorMessage = error.response ? error.response.data : error.message
+      console.error('Error uploading files:', errorMessage)
     }
+    console.log("🟨 Screenshots:", fileUris.length);
 
-    // 🔹 UPLOAD FINAL TEST REPORT
     try {
+      // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
       const mode =
         process.env.MODE === 'cloud'
           ? 'cloud'
@@ -217,7 +246,7 @@ class RunUploadService {
         rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`
       if (mode === 'executions')
         testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
-
+      }
       const payload = {
         runId,
         projectId,
@@ -226,24 +255,47 @@ class RunUploadService {
         mode,
         rerunId: rerunIdFinal,
         video_id: process.env.VIDEO_ID,
-      }
+      };
 
-      const data = await createNewTestCase(
+      const json = JSON.stringify(payload);
+      console.log("🟥 Payload size KB:", Buffer.byteLength(json) / 1024);
+      const start = Date.now();
+      const { data } = await axiosClient.post<FinishTestCaseResponse>(
+        `${this.runsApiBaseURL}/cucumber-runs/createNewTestCase`,
         payload,
-        this.runsApiBaseURL,
-        this.accessToken
-      )
-      await postUploadReportEvent(projectId, this.accessToken)
+        {
+          headers: {
+            Authorization: 'Bearer ' + this.accessToken,
+            'x-source': 'cucumber_js',
+          },
+        }
+      );
+      console.log("🟩 POST /createNewTestCase finished in ms:", Date.now() - start);
+
+      try {
+        await axiosClient.post(
+          `${SERVICES_URI.STORAGE}/event`,
+          {
+            event: ActionEvents.upload_report,
+          },
+          {
+            headers: {
+              Authorization: 'Bearer ' + this.accessToken,
+              'x-source': 'cucumber_js',
+              'x-bvt-project-id': projectId,
+            },
+          }
+        )
+      } catch (error) {
+        // no event tracking
+      }
       logReportLink(runId, projectId, testCaseReport.result)
       return data
     } catch (e: any) {
-      console.error('🟥 Failed to upload test case:', {
-        testCaseId: testCaseReport.id,
-        message: e?.message,
-        status: e?.response?.status,
-        responseSnippet: e?.response?.data?.toString()?.slice(0, 300),
-        stack: e?.stack,
-      })
+      const sanitized = this.sanitizeError(e);
+      console.error("🟥 Raw response snippet:", e?.response?.data?.toString()?.slice(0, 300));
+
+      console.error(`failed to upload the test case: ${testCaseReport.id} ${sanitized}`)
       return null
     }
   }
