@@ -2,16 +2,12 @@
 import FormData from 'form-data'
 import { createReadStream, existsSync, write, writeFileSync } from 'fs'
 import fs from 'fs/promises'
-import pLimit from 'p-limit'
+import pLimit from 'p-limit';
 
 import { JsonReport, JsonTestProgress } from './report_generator'
 import { axiosClient } from '../../configuration/axios_client'
 import path from 'path'
-import {
-  createNewTestCase,
-  logReportLink,
-  postUploadReportEvent,
-} from '../bvt_analysis_formatter'
+import { createNewTestCase, logReportLink, postUploadReportEvent } from '../bvt_analysis_formatter'
 import { ActionEvents, SERVICES_URI } from './constants'
 
 const REPORT_SERVICE_URL = process.env.REPORT_SERVICE_URL ?? URL
@@ -176,77 +172,39 @@ class RunUploadService {
     reportFolder: string,
     rerunId?: string
   ) {
-    if (process.env.UPLOADREPORTS === 'false') return null
+    if (process.env.UPLOADREPORTS === 'false') return null;
 
-    const fileUris: string[] = []
+    const fileUris: string[] = [];
 
     // Collect screenshot + trace + logs
     for (const step of testCaseReport.steps) {
       for (const command of step.commands) {
-        if (command.screenshotId)
-          fileUris.push(`screenshots/${command.screenshotId}.png`)
+        if (command.screenshotId) fileUris.push(`screenshots/${command.screenshotId}.png`);
       }
       if (step.traceFilePath) fileUris.push(`trace/${step.traceFilePath}`)
+      if (step.traceFilePath) fileUris.push(`trace/${step.traceFilePath}`);
     }
-    if (testCaseReport.logFileId)
-      fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`)
-    if (testCaseReport.traceFileId)
-      fileUris.push(`trace/${testCaseReport.traceFileId}`)
+    if (testCaseReport.logFileId) fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`);
+    if (testCaseReport.traceFileId) fileUris.push(`trace/${testCaseReport.traceFileId}`);
 
     // 🔹 UPLOAD FILES
     try {
-      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
-      for (let i = 0; i < fileUris.length; i += BATCH_SIZE) {
-        const batch = fileUris.slice(
-          i,
-          Math.min(i + BATCH_SIZE, fileUris.length)
-        )
-        await Promise.all(
-          batch
-            .filter((fileUri) => preSignedUrls[fileUri])
-            .map(async (fileUri) => {
-              for (let j = 0; j < MAX_RETRIES; j++) {
-                if (existsSync(path.join(reportFolder, fileUri))) {
-                  const success = await this.uploadFile(
-                    path.join(reportFolder, fileUri),
-                    preSignedUrls[fileUri]
-                  )
-                  if (success) {
-                    return
-                  }
-                }
-                const success = await this.uploadFile(
-                  path.join(reportFolder, fileUri),
-                  preSignedUrls[fileUri]
-                )
-                if (success) {
-                  return
-                }
-              }
-              console.error('Failed to upload file:', fileUri)
-            })
-        )
-      }
-    } catch (error) {
-      const errorMessage = error.response ? error.response.data : error.message
-      console.error('Error uploading files:', errorMessage)
+      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId);
+      await this.uploadFilesInBatches(fileUris, reportFolder, preSignedUrls);
+    } catch (error: any) {
+      console.error('🟥 Error uploading files:', {
+        message: error?.message,
+        stack: error?.stack,
+      });
     }
-    console.log("🟨 Screenshots:", fileUris.length);
 
+    // 🔹 UPLOAD FINAL TEST REPORT
     try {
-      // writeFileSync("report.json", JSON.stringify(testCaseReport, null, 2))
-      const mode =
-        process.env.MODE === 'cloud'
-          ? 'cloud'
-          : process.env.MODE === 'executions'
-            ? 'executions'
-            : 'local'
-      let rerunIdFinal = process.env.RETRY_ID || null
-      if (rerunId)
-        rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`
-      if (mode === 'executions')
-        testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
-      }
+      const mode = process.env.MODE === 'cloud' ? 'cloud' : process.env.MODE === 'executions' ? 'executions' : 'local';
+      let rerunIdFinal = process.env.RETRY_ID || null;
+      if (rerunId) rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`;
+      if (mode === 'executions') testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id;
+
       const payload = {
         runId,
         projectId,
@@ -257,46 +215,19 @@ class RunUploadService {
         video_id: process.env.VIDEO_ID,
       };
 
-      const json = JSON.stringify(payload);
-      console.log("🟥 Payload size KB:", Buffer.byteLength(json) / 1024);
-      const start = Date.now();
-      const { data } = await axiosClient.post<FinishTestCaseResponse>(
-        `${this.runsApiBaseURL}/cucumber-runs/createNewTestCase`,
-        payload,
-        {
-          headers: {
-            Authorization: 'Bearer ' + this.accessToken,
-            'x-source': 'cucumber_js',
-          },
-        }
-      );
-      console.log("🟩 POST /createNewTestCase finished in ms:", Date.now() - start);
-
-      try {
-        await axiosClient.post(
-          `${SERVICES_URI.STORAGE}/event`,
-          {
-            event: ActionEvents.upload_report,
-          },
-          {
-            headers: {
-              Authorization: 'Bearer ' + this.accessToken,
-              'x-source': 'cucumber_js',
-              'x-bvt-project-id': projectId,
-            },
-          }
-        )
-      } catch (error) {
-        // no event tracking
-      }
-      logReportLink(runId, projectId, testCaseReport.result)
-      return data
+      const data = await createNewTestCase(payload, this.runsApiBaseURL, this.accessToken);
+      await postUploadReportEvent(projectId, this.accessToken);
+      logReportLink(runId, projectId, testCaseReport.result);
+      return data;
     } catch (e: any) {
-      const sanitized = this.sanitizeError(e);
-      console.error("🟥 Raw response snippet:", e?.response?.data?.toString()?.slice(0, 300));
-
-      console.error(`failed to upload the test case: ${testCaseReport.id} ${sanitized}`)
-      return null
+      console.error('🟥 Failed to upload test case:', {
+        testCaseId: testCaseReport.id,
+        message: e?.message,
+        status: e?.response?.status,
+        responseSnippet: e?.response?.data?.toString()?.slice(0, 300),
+        stack: e?.stack,
+      });
+      return null;
     }
   }
 
@@ -339,6 +270,41 @@ class RunUploadService {
       if (key === 'password' || key === 'accessToken') return '[REDACTED]';
       return value;
     }, 2); // Pretty-print the error object with indentation
+  }
+  async uploadFileWithRetries(filePath: string, presignedUrl: string) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 1000;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const ok = await this.uploadFile(filePath, presignedUrl);
+        if (ok) return true;
+      } catch (err: any) {
+        console.error(`Upload attempt #${attempt} failed for ${filePath}:`, {
+          message: err?.message,
+          stack: err?.stack,
+        });
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+        }
+      }
+    }
+    console.error(`Failed to upload file after ${MAX_RETRIES} retries: ${filePath}`);
+    return false;
+  }
+
+  async uploadFilesInBatches(fileUris: string[], reportFolder: string, preSignedUrls: Record<string, string>) {
+    const MAX_CONCURRENCY = 5;
+    const limit = pLimit(MAX_CONCURRENCY);
+    const tasks = fileUris
+      .filter(uri => preSignedUrls[uri])
+      .map(uri => limit(async () => {
+        const filePath = path.join(reportFolder, uri);
+        if (existsSync(filePath)) {
+          await this.uploadFileWithRetries(filePath, preSignedUrls[uri]);
+        }
+      }));
+
+    await Promise.all(tasks);
   }
 
   async uploadFile(filePath: string, preSignedUrl: string) {
