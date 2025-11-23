@@ -487,3 +487,54 @@ function publishReportLinkToGuacServer(reportLink: string, result: boolean) {
     execAsync('sh /tmp/report_publish.sh ' + reportLink + ' ' + result)
   }
 }
+
+export async function postUploadReportEvent(projectId: string, accessToken: string) {
+  try {
+    await axiosClient.post(
+      `${SERVICES_URI.STORAGE}/event`,
+      { event: ActionEvents.upload_report },
+      {
+        headers: {
+          Authorization: 'Bearer ' + accessToken,
+          'x-source': 'cucumber_js',
+          'x-bvt-project-id': projectId,
+        },
+      }
+    )
+  } catch { }
+}
+
+export async function createNewTestCase(payload: any, runsApiBaseURL: string, accessToken: string): Promise<any> {
+  const jsonSizeKB = Buffer.byteLength(JSON.stringify(payload)) / 1024;
+
+  if (jsonSizeKB > 10240) { // 10 MB
+    console.warn(`⚠️ Payload exceeds recommended size of 10MB: ${jsonSizeKB} KB`);
+  }
+
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 1000;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const start = Date.now();
+    try {
+      const { data } = await axiosClient.post(`${runsApiBaseURL}/cucumber-runs/createNewTestCase`, payload, {
+        headers: { Authorization: 'Bearer ' + accessToken, 'x-source': 'cucumber_js' },
+      });
+      return data;
+    } catch (e: any) {
+      const isLastAttempt = attempt === MAX_RETRIES;
+      const errInfo = {
+        attempt,
+        message: e?.message,
+        status: e?.response?.status,
+        responseSnippet: e?.response?.data?.toString()?.slice(0, 300),
+        durationMs: Date.now() - start,
+      };
+      console.error('🟥 Failed to POST /createNewTestCase:', JSON.stringify(errInfo, null, 2));
+
+      if (isLastAttempt) throw e;
+
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+    }
+  }
+}
