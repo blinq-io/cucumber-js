@@ -11,7 +11,7 @@ import {
   parse,
 } from '../../../test/gherkin_helpers'
 import * as messages from '@cucumber/messages'
-import IGherkinDocument = messages.GherkinDocument
+type IGherkinDocument = messages.GherkinDocument
 import { reindent } from 'reindent-template-literals'
 
 describe('GherkinDocumentParser', () => {
