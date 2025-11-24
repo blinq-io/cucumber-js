@@ -1,4 +1,4 @@
-import UncaughtExceptionListener = NodeJS.UncaughtExceptionListener
+type UncaughtExceptionListener = NodeJS.UncaughtExceptionListener
 
 const UncaughtExceptionManager = {
   registerHandler(handler: UncaughtExceptionListener): void {
