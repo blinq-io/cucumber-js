@@ -5,5 +5,4 @@ export class FakeLogger implements ILogger {
   debug = sinon.fake()
   error = sinon.fake()
   warn = sinon.fake()
-
 }
