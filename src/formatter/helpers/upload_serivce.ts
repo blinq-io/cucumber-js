@@ -37,7 +37,7 @@ class RunUploadService {
   constructor(
     private runsApiBaseURL: string,
     private accessToken: string
-  ) {}
+  ) { }
   async createRunDocument(name: string, env: any) {
     if (process.env.UPLOADREPORTS === 'false') {
       console.log('Skipping report upload as UPLOADREPORTS is set to false')
@@ -176,47 +176,37 @@ class RunUploadService {
     reportFolder: string,
     rerunId?: string
   ) {
-    if (process.env.UPLOADREPORTS === 'false') return null
+    if (process.env.UPLOADREPORTS === 'false') return null;
 
-    const fileUris: string[] = []
+    const fileUris: string[] = [];
 
     // Collect screenshot + trace + logs
     for (const step of testCaseReport.steps) {
       for (const command of step.commands) {
-        if (command.screenshotId)
-          fileUris.push(`screenshots/${command.screenshotId}.png`)
+        if (command.screenshotId) fileUris.push(`screenshots/${command.screenshotId}.png`);
       }
-      if (step.traceFilePath) fileUris.push(`trace/${step.traceFilePath}`)
+      if (step.traceFilePath) fileUris.push(`trace/${step.traceFilePath}`);
     }
-    if (testCaseReport.logFileId)
-      fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`)
-    if (testCaseReport.traceFileId)
-      fileUris.push(`trace/${testCaseReport.traceFileId}`)
+    if (testCaseReport.logFileId) fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`);
+    if (testCaseReport.traceFileId) fileUris.push(`trace/${testCaseReport.traceFileId}`);
 
     // 🔹 UPLOAD FILES
     try {
-      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
-      await this.uploadFilesInBatches(fileUris, reportFolder, preSignedUrls)
+      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId);
+      await this.uploadFilesInBatches(fileUris, reportFolder, preSignedUrls);
     } catch (error: any) {
       console.error('🟥 Error uploading files:', {
         message: error?.message,
         stack: error?.stack,
-      })
+      });
     }
 
     // 🔹 UPLOAD FINAL TEST REPORT
     try {
-      const mode =
-        process.env.MODE === 'cloud'
-          ? 'cloud'
-          : process.env.MODE === 'executions'
-            ? 'executions'
-            : 'local'
-      let rerunIdFinal = process.env.RETRY_ID || null
-      if (rerunId)
-        rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`
-      if (mode === 'executions')
-        testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id
+      const mode = process.env.MODE === 'cloud' ? 'cloud' : process.env.MODE === 'executions' ? 'executions' : 'local';
+      let rerunIdFinal = process.env.RETRY_ID || null;
+      if (rerunId) rerunIdFinal = rerunId.includes(runId) ? rerunId : `${runId}${rerunId}`;
+      if (mode === 'executions') testCaseReport.id = process.env.VIDEO_ID || testCaseReport.id;
 
       const payload = {
         runId,
@@ -226,16 +216,12 @@ class RunUploadService {
         mode,
         rerunId: rerunIdFinal,
         video_id: process.env.VIDEO_ID,
-      }
+      };
 
-      const data = await createNewTestCase(
-        payload,
-        this.runsApiBaseURL,
-        this.accessToken
-      )
-      await postUploadReportEvent(projectId, this.accessToken)
-      logReportLink(runId, projectId, testCaseReport.result)
-      return data
+      const data = await createNewTestCase(payload, this.runsApiBaseURL, this.accessToken);
+      await postUploadReportEvent(projectId, this.accessToken);
+      logReportLink(runId, projectId, testCaseReport.result);
+      return data;
     } catch (e: any) {
       console.error('🟥 Failed to upload test case:', {
         testCaseId: testCaseReport.id,
@@ -243,8 +229,8 @@ class RunUploadService {
         status: e?.response?.status,
         responseSnippet: e?.response?.data?.toString()?.slice(0, 300),
         stack: e?.stack,
-      })
-      return null
+      });
+      return null;
     }
   }
 
@@ -255,11 +241,11 @@ class RunUploadService {
   private sanitizeError(error: any) {
     // Handle Axios-style errors with response
     if (error?.response) {
-      const { data, status } = error.response
+      const { data, status } = error.response;
 
       // If Cloudflare or HTML error page → return a short meaningful message
       if (typeof data === 'string' && data.includes('<!DOCTYPE html')) {
-        return `[HTML_ERROR_PAGE] status=${status} - likely Cloudflare timeout or proxy error`
+        return `[HTML_ERROR_PAGE] status=${status} - likely Cloudflare timeout or proxy error`;
       }
 
       // If data is a JSON object, stringify it with indentation for readability
@@ -273,7 +259,7 @@ class RunUploadService {
 
     // System / network errors (e.g., if Axios cannot reach the server)
     if (error?.message) {
-      return error.message
+      return error.message;
     }
 
     // If the error has a stack (for debugging purposes)
@@ -355,12 +341,7 @@ class RunUploadService {
     } catch (error) {
       if (process.env.MODE === 'executions') {
         const sanitized = this.sanitizeError(error)
-        console.error(
-          '❌ Error uploading file at:',
-          filePath,
-          'due to',
-          sanitized
-        )
+        console.error('❌ Error uploading file at:', filePath, 'due to', sanitized);
       }
       success = false
     } finally {
