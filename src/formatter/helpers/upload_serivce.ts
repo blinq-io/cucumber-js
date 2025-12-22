@@ -327,7 +327,9 @@ class RunUploadService {
       .filter((uri) => preSignedUrls[uri])
       .map((uri) =>
         limit(async () => {
-          const filePath = uri.includes('reports') ? path.join(reportFolder, "0", "report.json") : path.join(reportFolder, uri)
+          const filePath = uri.includes('reports')
+            ? path.join(reportFolder, '0', 'report.json')
+            : path.join(reportFolder, uri)
           if (existsSync(filePath)) {
             await this.uploadFileWithRetries(filePath, preSignedUrls[uri])
           }
