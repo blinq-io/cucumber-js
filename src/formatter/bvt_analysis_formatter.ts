@@ -301,7 +301,6 @@ export default class BVTAnalysisFormatter extends Formatter {
       const envVars: NodeJS.ProcessEnv = {
         ...process.env,
         RERUN: JSON.stringify(this.failedStepsIndex),
-        TRACE: undefined,
       }
 
       // Inject Electron node env only if using bundled node
@@ -386,6 +385,7 @@ export default class BVTAnalysisFormatter extends Formatter {
         const envVars: NodeJS.ProcessEnv = {
           ...process.env,
           TEMP_FILE_PATH: tempFile,
+          TRACE: undefined
         }
 
         if (node_path === process.execPath) {
