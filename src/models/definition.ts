@@ -34,8 +34,7 @@ export interface IDefinitionParameters<T extends IDefinitionOptions> {
   uri: string
 }
 
-export interface IStepDefinitionParameters
-  extends IDefinitionParameters<IDefinitionOptions> {
+export interface IStepDefinitionParameters extends IDefinitionParameters<IDefinitionOptions> {
   keyword: GherkinStepKeyword
   pattern: string | RegExp
   expression: Expression
