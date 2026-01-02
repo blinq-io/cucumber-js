@@ -14,9 +14,9 @@ export interface IWorld<ParametersType = any> {
   [key: string]: any
 }
 
-export default class World<ParametersType = any>
-  implements IWorld<ParametersType>
-{
+export default class World<
+  ParametersType = any,
+> implements IWorld<ParametersType> {
   public readonly attach: ICreateAttachment
   public readonly log: ICreateLog
   public readonly parameters: ParametersType
