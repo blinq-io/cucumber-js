@@ -144,7 +144,6 @@ export type JsonTestProgress = {
     baseUrl: string
   }
   traceFileId?: string
-  // s3StorageId?: string
 }
 
 export type JsonReport = {
@@ -831,7 +830,6 @@ export default class ReportGenerator {
     }
     this.testCaseLog = []
 
-    // testProgress.s3StorageId = testCaseStartedId;
 
     if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
       this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
