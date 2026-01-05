@@ -831,7 +831,6 @@ export default class ReportGenerator {
     }
     this.testCaseLog = []
 
-
     if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
       this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
       if (!fs.existsSync(this.reportFolder)) {
