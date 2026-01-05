@@ -898,7 +898,7 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
-      this.writeTestCaseReportToDisk(testCase);
+      this.writeTestCaseReportToDisk(testCase)
       const data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
