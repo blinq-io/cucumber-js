@@ -830,7 +830,6 @@ export default class ReportGenerator {
     }
     this.testCaseLog = []
 
-
     if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
       this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
       if (!fs.existsSync(this.reportFolder)) {
@@ -897,7 +896,7 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
-      this.writeTestCaseReportToDisk(testCase);
+      this.writeTestCaseReportToDisk(testCase)
       const data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
