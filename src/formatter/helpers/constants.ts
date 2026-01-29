@@ -68,4 +68,5 @@ export enum ActionEvents {
   package_sync_error_major = 'package_sync_error_major', // Detected and caused degraded experience
   package_sync_error_fatal = 'package_sync_error_fatal', // Undetected and blocked operation
   draft_recovered = 'draft_recovered',
+  draft_deleted = 'draft_deleted',
 }
