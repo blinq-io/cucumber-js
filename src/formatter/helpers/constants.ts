@@ -34,14 +34,14 @@ export const SERVICES_URI =
   process.env.NODE_ENV_BLINQ === 'local'
     ? LOCAL // eslint-disable-line
     : process.env.NODE_ENV_BLINQ === 'dev'
-      ? DEV // eslint-disable-line
-      : process.env.NODE_ENV_BLINQ === 'stage'
-        ? STAGE // eslint-disable-line
-        : process.env.NODE_ENV_BLINQ === 'prod'
-          ? PROD // eslint-disable-line
-          : !process.env.NODE_ENV_BLINQ
-            ? PROD // eslint-disable-line
-            : CUSTOM // eslint-disable-line
+    ? DEV // eslint-disable-line
+    : process.env.NODE_ENV_BLINQ === 'stage'
+    ? STAGE // eslint-disable-line
+    : process.env.NODE_ENV_BLINQ === 'prod'
+    ? PROD // eslint-disable-line
+    : !process.env.NODE_ENV_BLINQ
+    ? PROD // eslint-disable-line
+    : CUSTOM // eslint-disable-line
 
 export enum ActionEvents {
   record_scenario = 'record_scenario',
@@ -68,4 +68,5 @@ export enum ActionEvents {
   package_sync_error_major = 'package_sync_error_major', // Detected and caused degraded experience
   package_sync_error_fatal = 'package_sync_error_fatal', // Undetected and blocked operation
   draft_recovered = 'draft_recovered',
+  draft_deleted = 'draft_deleted',
 }
