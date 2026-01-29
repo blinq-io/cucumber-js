@@ -56,4 +56,17 @@ export enum ActionEvents {
   error_open_vscode = 'error_open_vscode',
   cli_run_tests = 'cli_run_tests',
   upload_report = 'upload_report',
+  signup = 'signup',
+  create_project = 'create_project',
+  create_scenario = 'create_scenario',
+  launched_chromium_success = 'launched_chromium_success',
+  launched_chromium_failed = 'launched_chromium_failed',
+  update_started = 'update_started',
+  update_downloaded = 'update_downloaded',
+  update_error = 'update_error',
+  package_sync_error_minor = 'package_sync_error_minor', // Detected but did not block operation
+  package_sync_error_major = 'package_sync_error_major', // Detected and caused degraded experience
+  package_sync_error_fatal = 'package_sync_error_fatal', // Undetected and blocked operation
+  draft_recovered = 'draft_recovered',
+  draft_deleted = 'draft_deleted',
 }
