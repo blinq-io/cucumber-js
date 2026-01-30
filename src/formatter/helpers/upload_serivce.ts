@@ -180,7 +180,7 @@ class RunUploadService {
 
     const fileUris: string[] = []
 
-    // Collect screenshot + trace + logs
+    // Collect screenshot + trace + logs + report
     for (const step of testCaseReport.steps) {
       for (const command of step.commands) {
         if (command.screenshotId)
@@ -192,6 +192,7 @@ class RunUploadService {
       fileUris.push(`editorLogs/testCaseLog_${testCaseReport.logFileId}.log`)
     if (testCaseReport.traceFileId)
       fileUris.push(`trace/${testCaseReport.traceFileId}`)
+    fileUris.push(`reports/report-${testCaseReport.id}.json`)
 
     // 🔹 UPLOAD FILES
     try {
@@ -326,7 +327,9 @@ class RunUploadService {
       .filter((uri) => preSignedUrls[uri])
       .map((uri) =>
         limit(async () => {
-          const filePath = path.join(reportFolder, uri)
+          const filePath = uri.includes('reports')
+            ? path.join(reportFolder, '0', 'report.json')
+            : path.join(reportFolder, uri)
           if (existsSync(filePath)) {
             await this.uploadFileWithRetries(filePath, preSignedUrls[uri])
           }

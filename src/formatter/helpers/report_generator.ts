@@ -896,6 +896,7 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
+      this.writeTestCaseReportToDisk(testCase)
       const data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
@@ -903,7 +904,6 @@ export default class ReportGenerator {
         this.reportFolder,
         rerunId
       )
-      this.writeTestCaseReportToDisk(testCase)
       return data
     } finally {
       const arrRem = JSON.parse(process.env.UPLOADING_TEST_CASE) as string[]
@@ -928,6 +928,7 @@ export default class ReportGenerator {
       //exclude network log from the saved report
       const networkLog = testCase.networkLog
       delete testCase.networkLog
+      delete testCase.webLog
       fs.writeFileSync(
         path.join(reportFolder, `${i}`, `report.json`),
         JSON.stringify(testCase, null, 2)
