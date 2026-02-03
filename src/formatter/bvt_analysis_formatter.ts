@@ -213,9 +213,9 @@ export default class BVTAnalysisFormatter extends Formatter {
       await this.uploader.modifyTestCase({
         ...report,
         retrainStats,
-      });
+      })
     } else {
-      this.log(`No stats found retraining...`);
+      this.log(`No stats found retraining...`)
     }
     await this.rerun(report)
   }
@@ -422,10 +422,12 @@ export default class BVTAnalysisFormatter extends Formatter {
               resolve(retrainStats)
             }
           } catch (e) {
-            const message = e.message;
-            const stack = e.stack;
-            this.log(`Error occured while reading scenario report:${(message)}\n${stack}`);
-            resolve(null);
+            const message = e.message
+            const stack = e.stack
+            this.log(
+              `Error occured while reading scenario report:${message}\n${stack}`
+            )
+            resolve(null)
           }
         })
       })
