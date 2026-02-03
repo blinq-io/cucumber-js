@@ -209,15 +209,14 @@ export default class BVTAnalysisFormatter extends Formatter {
 
     const retrainStats = await this.retrain(failedTestSteps, report)
 
-    if (!retrainStats) {
-      return
+    if (retrainStats) {
+      await this.uploader.modifyTestCase({
+        ...report,
+        retrainStats,
+      });
+    } else {
+      this.log(`No stats found retraining...`);
     }
-
-    await this.uploader.modifyTestCase({
-      ...report,
-      retrainStats,
-    })
-
     await this.rerun(report)
   }
 
@@ -409,22 +408,24 @@ export default class BVTAnalysisFormatter extends Formatter {
         })
 
         cucumberClient.on('close', async (code) => {
-          if (code === 0) {
-            const reportData = readFileSync(tempFile, 'utf-8')
-            const retrainStats = JSON.parse(reportData) as RetrainStats
-            await unlink(tempFile)
-            resolve(retrainStats)
-          } else {
-            this.log('Error retraining\n')
-            try {
+          try {
+            if (code === 0) {
               const reportData = readFileSync(tempFile, 'utf-8')
               const retrainStats = JSON.parse(reportData) as RetrainStats
               await unlink(tempFile)
               resolve(retrainStats)
-            } catch (e) {
-              this.log('Error  reading scenario report\n ' + e)
-              resolve(null)
+            } else {
+              this.log('Error retraining\n')
+              const reportData = readFileSync(tempFile, 'utf-8')
+              const retrainStats = JSON.parse(reportData) as RetrainStats
+              await unlink(tempFile)
+              resolve(retrainStats)
             }
+          } catch (e) {
+            const message = e.message;
+            const stack = e.stack;
+            this.log(`Error occured while reading scenario report:${(message)}\n${stack}`);
+            resolve(null);
           }
         })
       })
