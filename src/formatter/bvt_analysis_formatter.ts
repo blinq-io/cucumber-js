@@ -266,16 +266,10 @@ export default class BVTAnalysisFormatter extends Formatter {
   private async rerun(report: JsonTestProgress) {
     await new Promise<void>((resolve) => {
       // Default to system Node.js
-      let node_path = process.argv.shift()
+      const node_path = process.execPath;
 
       // Use bundled Node if running from recorder app on macOS or Windows
       const isFromRecorderApp = process.env.FROM_RECORDER_APP === 'true'
-      const isSupportedPlatform =
-        process.platform === 'darwin' || process.platform === 'win32'
-
-      if (isFromRecorderApp && isSupportedPlatform) {
-        node_path = process.execPath
-      }
 
       const args = [
         path.join(
@@ -301,24 +295,24 @@ export default class BVTAnalysisFormatter extends Formatter {
         RERUN: JSON.stringify(this.failedStepsIndex),
       }
 
-      // Inject Electron node env only if using bundled node
-      if (node_path === process.execPath) {
+      // Inject Electron node env only if using electron's bundled node
+      if (isFromRecorderApp) {
         envVars.ELECTRON_RUN_AS_NODE = '1'
       }
 
-      const cucumberClient = spawn(node_path!, args, {
+      const cucumberJSChildProcess = spawn(node_path!, args, {
         env: envVars,
       })
 
-      cucumberClient.stdout.on('data', (data) => {
+      cucumberJSChildProcess.stdout.on('data', (data) => {
         console.log(data.toString())
       })
 
-      cucumberClient.stderr.on('data', (data) => {
+      cucumberJSChildProcess.stderr.on('data', (data) => {
         console.error(data.toString())
       })
 
-      cucumberClient.on('close', () => {
+      cucumberJSChildProcess.on('close', () => {
         resolve()
       })
     })
@@ -375,10 +369,7 @@ export default class BVTAnalysisFormatter extends Formatter {
 
         // Determine node path
         const isFromRecorderApp = process.env.FROM_RECORDER_APP === 'true'
-        const isSupportedPlatform =
-          process.platform === 'darwin' || process.platform === 'win32'
-        const node_path =
-          isFromRecorderApp && isSupportedPlatform ? process.execPath : 'node'
+        const node_path = process.execPath;
 
         const envVars: NodeJS.ProcessEnv = {
           ...process.env,
@@ -386,7 +377,7 @@ export default class BVTAnalysisFormatter extends Formatter {
           TRACE: undefined,
         }
 
-        if (node_path === process.execPath) {
+        if (isFromRecorderApp) {
           envVars.ELECTRON_RUN_AS_NODE = '1'
         }
 
@@ -505,7 +496,7 @@ export async function postUploadReportEvent(
         },
       }
     )
-  } catch {}
+  } catch { }
 }
 
 export async function createNewTestCase(
