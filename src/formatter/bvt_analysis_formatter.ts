@@ -267,7 +267,7 @@ export default class BVTAnalysisFormatter extends Formatter {
   private async rerun(report: JsonTestProgress) {
     await new Promise<void>((resolve) => {
       // Default to system Node.js
-      const node_path = process.execPath;
+      const node_path = process.execPath
 
       // Use bundled Node if running from recorder app on macOS or Windows
       const isFromRecorderApp = process.env.FROM_RECORDER_APP === 'true'
@@ -370,7 +370,7 @@ export default class BVTAnalysisFormatter extends Formatter {
 
         // Determine node path
         const isFromRecorderApp = process.env.FROM_RECORDER_APP === 'true'
-        const node_path = process.execPath;
+        const node_path = process.execPath
 
         const envVars: NodeJS.ProcessEnv = {
           ...process.env,
@@ -499,7 +499,7 @@ export async function postUploadReportEvent(
         },
       }
     )
-  } catch { }
+  } catch {}
 }
 
 export async function createNewTestCase(
