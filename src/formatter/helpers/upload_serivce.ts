@@ -217,7 +217,8 @@ class RunUploadService {
         mode,
         rerunId: rerunIdFinal,
         video_id: process.env.VIDEO_ID,
-      };
+        isBrowserEnv: process.env.REMOTE_EXECUTION === 'true' ? true : false,
+      }
 
       const data = await createNewTestCase(payload, this.runsApiBaseURL, this.accessToken);
       await postUploadReportEvent(projectId, this.accessToken);
