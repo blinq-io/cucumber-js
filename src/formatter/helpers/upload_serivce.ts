@@ -197,8 +197,13 @@ class RunUploadService {
 
     // 🔹 UPLOAD FILES
     try {
-      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId);
-      await this.uploadFilesInBatches(fileUris, reportFolder, reportIndex, preSignedUrls);
+      const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
+      await this.uploadFilesInBatches(
+        fileUris,
+        reportFolder,
+        reportIndex,
+        preSignedUrls
+      )
     } catch (error: any) {
       console.error('🟥 Error uploading files:', {
         message: error?.message,
@@ -330,7 +335,9 @@ class RunUploadService {
       .filter((uri) => preSignedUrls[uri])
       .map((uri) =>
         limit(async () => {
-          const filePath = uri.includes('reports') ? path.join(reportFolder, reportIndex.toString(), "report.json") : path.join(reportFolder, uri)
+          const filePath = uri.includes('reports')
+            ? path.join(reportFolder, reportIndex.toString(), 'report.json')
+            : path.join(reportFolder, uri)
           if (existsSync(filePath)) {
             await this.uploadFileWithRetries(filePath, preSignedUrls[uri])
           }
