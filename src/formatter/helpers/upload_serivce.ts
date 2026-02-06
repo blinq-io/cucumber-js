@@ -174,6 +174,7 @@ class RunUploadService {
     runId: string,
     projectId: string,
     reportFolder: string,
+    reportIndex: number,
     rerunId?: string
   ) {
     if (process.env.UPLOADREPORTS === 'false') return null
@@ -197,7 +198,12 @@ class RunUploadService {
     // 🔹 UPLOAD FILES
     try {
       const preSignedUrls = await this.getPreSignedUrls(fileUris, runId)
-      await this.uploadFilesInBatches(fileUris, reportFolder, preSignedUrls)
+      await this.uploadFilesInBatches(
+        fileUris,
+        reportFolder,
+        reportIndex,
+        preSignedUrls
+      )
     } catch (error: any) {
       console.error('🟥 Error uploading files:', {
         message: error?.message,
@@ -320,6 +326,7 @@ class RunUploadService {
   async uploadFilesInBatches(
     fileUris: string[],
     reportFolder: string,
+    reportIndex: number,
     preSignedUrls: Record<string, string>
   ) {
     const MAX_CONCURRENCY = 5
@@ -329,7 +336,7 @@ class RunUploadService {
       .map((uri) =>
         limit(async () => {
           const filePath = uri.includes('reports')
-            ? path.join(reportFolder, '0', 'report.json')
+            ? path.join(reportFolder, reportIndex.toString(), 'report.json')
             : path.join(reportFolder, uri)
           if (existsSync(filePath)) {
             await this.uploadFileWithRetries(filePath, preSignedUrls[uri])
