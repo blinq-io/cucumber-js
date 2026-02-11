@@ -207,6 +207,13 @@ export default class BVTAnalysisFormatter extends Formatter {
       BVTAnalysisFormatter.reRunFailedStepsIndex.shift()
     }
 
+    if (process.env.RERUN) {
+      await this.uploader.modifyTestCase({
+        ...report,
+      })
+      return
+    }
+
     const retrainStats = await this.retrain(failedTestSteps, report)
 
     if (retrainStats) {
