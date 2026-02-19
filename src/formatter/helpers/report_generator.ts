@@ -830,6 +830,7 @@ export default class ReportGenerator {
     }
     this.testCaseLog = []
 
+
     if (process.env.TESTCASE_REPORT_FOLDER_PATH) {
       this.reportFolder = process.env.TESTCASE_REPORT_FOLDER_PATH
       if (!fs.existsSync(this.reportFolder)) {
@@ -896,7 +897,7 @@ export default class ReportGenerator {
           process.env.PROJECT_ID = projectId
         }
       }
-      const reportIndex = this.writeTestCaseReportToDisk(testCase)
+      const reportIndex = this.writeTestCaseReportToDisk(testCase);
       const data = await this.uploadService.uploadTestCase(
         testCase,
         runId,
@@ -918,7 +919,7 @@ export default class ReportGenerator {
       this.reportFolder ?? process.env.TESTCASE_REPORT_FOLDER_PATH
     if (!reportFolder) {
       console.error('Report folder is not defined')
-      return -1
+      return -1;
     }
     try {
       let i = 0
@@ -938,10 +939,10 @@ export default class ReportGenerator {
         path.join(reportFolder, `${i}`, `network.json`),
         JSON.stringify(networkLog, null, 2)
       )
-      return i
+      return i;
     } catch (error) {
       console.error('Error writing test case report to disk:', error)
-      return -1
+      return -1;
     }
   }
   private async onTestRunFinished(testRunFinished: messages.TestRunFinished) {
